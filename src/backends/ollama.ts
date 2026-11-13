@@ -15,7 +15,9 @@ import type {
   ToolCall,
   Usage,
 } from "../openai/types.js";
-import { lines, upstreamFetch } from "./http.js";
+import type { Agent, Response } from "undici";
+import type { GatewayError } from "../errors.js";
+import { createAgent, Deadline, lines, upstreamFetch, upstreamJson, type UpstreamRequest } from "./http.js";
 import type { Backend, CallOptions } from "./types.js";
 
 // Ollama's native API: https://github.com/ollama/ollama/blob/main/docs/api.md
@@ -150,26 +152,45 @@ function toResult(r: OllamaResponse): ChatResult {
 
 export class OllamaBackend implements Backend {
   readonly type = "ollama";
+  private readonly agent: Agent;
 
   constructor(
     readonly name: string,
     private readonly config: BackendConfig,
-  ) {}
+  ) {
+    this.agent = createAgent(config.timeouts);
+  }
 
-  private post(path: string, body: unknown, signal: AbortSignal, model: string): Promise<Response> {
-    return upstreamFetch({ backend: this.name, url: `${this.config.url}${path}`, body, signal }, (status, detail) => {
-      // Ollama answers 404 "model 'x' not found"; the route replaces the name with the one the client used.
-      if (status === 404 && /model/i.test(detail)) return errors.modelNotFound(model);
-      // 501 from /api/embed: the model cannot produce embeddings.
-      if (status === 501) return errors.badRequest(`The model '${model}' does not support this endpoint.`, "model", "model_not_supported");
-      return undefined;
-    });
+  private deadline(signal: AbortSignal): Deadline {
+    return new Deadline(this.name, signal, this.config.timeouts.responseMs);
+  }
+
+  private request(path: string, body: unknown, deadline: Deadline, model: string): UpstreamRequest & { onError: (status: number, detail: string) => GatewayError | undefined } {
+    return {
+      backend: this.name,
+      url: `${this.config.url}${path}`,
+      body,
+      deadline,
+      agent: this.agent,
+      onError: (status, detail) => {
+        // Ollama answers 404 "model 'x' not found"; the route replaces the name with the one the client used.
+        if (status === 404 && /model/i.test(detail)) return errors.modelNotFound(model);
+        // 501 from /api/embed: the model cannot produce embeddings.
+        if (status === 501) return errors.badRequest(`The model '${model}' does not support this endpoint.`, "model", "model_not_supported");
+        return undefined;
+      },
+    };
+  }
+
+  private async post<T>(path: string, body: unknown, signal: AbortSignal, model: string): Promise<T> {
+    const req = this.request(path, body, this.deadline(signal), model);
+    return upstreamJson<T>(req, req.onError);
   }
 
   /** Reads an NDJSON stream from /api/chat or /api/generate as deltas. */
-  private async *deltas(body: ReadableStream<Uint8Array>, signal: AbortSignal): AsyncGenerator<ChatDelta> {
+  private async *deltas(res: Response, deadline: Deadline): AsyncGenerator<ChatDelta> {
     let sawToolCalls = false;
-    for await (const line of lines(body, this.name, signal)) {
+    for await (const line of lines(res, this.name, deadline)) {
       if (!line.trim()) continue;
       const r = JSON.parse(line) as OllamaResponse;
       if (r.error) throw errors.upstreamError(this.name, 500, r.error);
@@ -193,9 +214,10 @@ export class OllamaBackend implements Backend {
   }
 
   private async stream(path: string, body: Record<string, unknown>, signal: AbortSignal, model: string): Promise<AsyncIterable<ChatDelta>> {
-    const res = await this.post(path, body, signal, model);
-    if (!res.body) throw errors.upstreamUnavailable(this.name);
-    return this.deltas(res.body, signal);
+    const deadline = this.deadline(signal);
+    const req = this.request(path, body, deadline, model);
+    const res = await upstreamFetch(req, req.onError);
+    return this.deltas(res, deadline);
   }
 
   private chatBody(req: ChatCompletionRequest, stream: boolean): Record<string, unknown> {
@@ -218,8 +240,7 @@ export class OllamaBackend implements Backend {
   }
 
   async chat(req: ChatCompletionRequest, { signal }: CallOptions): Promise<ChatResult> {
-    const res = await this.post("/api/chat", this.chatBody(req, false), signal, req.model);
-    const r = (await res.json()) as OllamaResponse;
+    const r = await this.post<OllamaResponse>("/api/chat", this.chatBody(req, false), signal, req.model);
     if (r.error) throw errors.upstreamError(this.name, 500, r.error);
     return toResult(r);
   }
@@ -229,8 +250,7 @@ export class OllamaBackend implements Backend {
   }
 
   async complete(req: CompletionRequest, { signal }: CallOptions): Promise<ChatResult> {
-    const res = await this.post("/api/generate", this.generateBody(req, false), signal, req.model);
-    const r = (await res.json()) as OllamaResponse;
+    const r = await this.post<OllamaResponse>("/api/generate", this.generateBody(req, false), signal, req.model);
     if (r.error) throw errors.upstreamError(this.name, 500, r.error);
     return toResult(r);
   }
@@ -242,8 +262,7 @@ export class OllamaBackend implements Backend {
   async embed(req: EmbeddingRequest, { signal }: CallOptions): Promise<EmbeddingResult> {
     const body: Record<string, unknown> = { model: req.model, input: req.input };
     if (req.dimensions !== undefined) body.dimensions = req.dimensions;
-    const res = await this.post("/api/embed", body, signal, req.model);
-    const r = (await res.json()) as { embeddings?: number[][]; prompt_eval_count?: number };
+    const r = await this.post<{ embeddings?: number[][]; prompt_eval_count?: number }>("/api/embed", body, signal, req.model);
     if (r.embeddings?.length !== req.input.length) {
       throw errors.upstreamError(this.name, 500, "unexpected number of embeddings");
     }
@@ -251,13 +270,16 @@ export class OllamaBackend implements Backend {
   }
 
   async checkHealth({ signal }: CallOptions): Promise<void> {
-    const res = await upstreamFetch({ backend: this.name, url: `${this.config.url}/api/version`, signal });
-    await res.body?.cancel();
+    await upstreamJson({ backend: this.name, url: `${this.config.url}/api/version`, signal, agent: this.agent });
   }
 
   async listModels({ signal }: CallOptions): Promise<ModelInfo[]> {
-    const res = await upstreamFetch({ backend: this.name, url: `${this.config.url}/api/tags`, signal });
-    const r = (await res.json()) as { models?: { name: string; modified_at?: string }[] };
+    const r = await upstreamJson<{ models?: { name: string; modified_at?: string }[] }>({
+      backend: this.name,
+      url: `${this.config.url}/api/tags`,
+      deadline: this.deadline(signal),
+      agent: this.agent,
+    });
     return (r.models ?? []).map((m) => ({
       id: m.name,
       created: m.modified_at ? Math.floor(new Date(m.modified_at).getTime() / 1000) || 0 : 0,

@@ -13,7 +13,8 @@ import type {
   ToolCall,
   Usage,
 } from "../openai/types.js";
-import { lines, upstreamFetch } from "./http.js";
+import type { Agent, Response } from "undici";
+import { createAgent, Deadline, lines, upstreamFetch, upstreamJson, type UpstreamRequest } from "./http.js";
 import type { Backend, CallOptions } from "./types.js";
 
 // Any server that speaks the OpenAI API: llama.cpp server, LM Studio, vLLM, Ollama's /v1, …
@@ -79,9 +80,9 @@ function samplingBody(s: SamplingOptions): Record<string, unknown> {
 }
 
 /** Reads `data:` events from an SSE stream; multi-line data is joined, comments are skipped. */
-async function* sseEvents(body: ReadableStream<Uint8Array>, backend: string, signal: AbortSignal): AsyncGenerator<string> {
+async function* sseEvents(res: Response, backend: string, deadline: Deadline): AsyncGenerator<string> {
   let data: string[] = [];
-  for await (const line of lines(body, backend, signal)) {
+  for await (const line of lines(res, backend, deadline)) {
     if (line === "") {
       if (data.length > 0) yield data.join("\n");
       data = [];
@@ -143,35 +144,44 @@ async function* deltasFrom(events: AsyncGenerator<string>, backend: string, fiel
 
 export class OpenAICompatibleBackend implements Backend {
   readonly type = "openai";
+  private readonly agent: Agent;
 
   constructor(
     readonly name: string,
     private readonly config: BackendConfig,
-  ) {}
-
-  private headers(): Record<string, string> {
-    return this.config.apiKey ? { authorization: `Bearer ${this.config.apiKey}` } : {};
+  ) {
+    this.agent = createAgent(config.timeouts);
   }
 
-  private request(path: string, signal: AbortSignal, model: string, body?: unknown): Promise<Response> {
-    return upstreamFetch(
-      { backend: this.name, url: `${this.config.url}${path}`, body, signal, headers: this.headers() },
-      (status, detail) => (status === 404 && /model/i.test(detail) ? errors.modelNotFound(model) : undefined),
-    );
+  private request(path: string, deadline: Deadline | AbortSignal, model: string, body?: unknown): UpstreamRequest {
+    return {
+      backend: this.name,
+      url: `${this.config.url}${path}`,
+      body,
+      ...(deadline instanceof Deadline ? { deadline } : { signal: deadline }),
+      headers: this.config.apiKey ? { authorization: `Bearer ${this.config.apiKey}` } : {},
+      agent: this.agent,
+    };
   }
 
-  private async json(path: string, signal: AbortSignal, model: string, body: unknown): Promise<UpstreamResponse> {
-    const res = await this.request(path, signal, model, body);
-    const r = (await res.json()) as UpstreamResponse;
+  private readonly onError = (model: string) => (status: number, detail: string) =>
+    status === 404 && /model/i.test(detail) ? errors.modelNotFound(model) : undefined;
+
+  private async json<T extends { error?: UpstreamResponse["error"] }>(path: string, signal: AbortSignal, model: string, body?: unknown): Promise<T> {
+    const deadline = new Deadline(this.name, signal, this.config.timeouts.responseMs);
+    const r = await upstreamJson<T>(this.request(path, deadline, model, body), this.onError(model));
     if (r.error) throw errors.upstreamError(this.name, 500, errorText(r.error));
     return r;
   }
 
   private async stream(path: string, body: Record<string, unknown>, signal: AbortSignal, model: string, field: "delta" | "text"): Promise<AsyncIterable<ChatDelta>> {
+    const deadline = new Deadline(this.name, signal, this.config.timeouts.responseMs);
     // Always ask for usage, so streamed requests can be counted.
-    const res = await this.request(path, signal, model, { ...body, stream: true, stream_options: { include_usage: true } });
-    if (!res.body) throw errors.upstreamUnavailable(this.name);
-    return deltasFrom(sseEvents(res.body, this.name, signal), this.name, field);
+    const res = await upstreamFetch(
+      this.request(path, deadline, model, { ...body, stream: true, stream_options: { include_usage: true } }),
+      this.onError(model),
+    );
+    return deltasFrom(sseEvents(res, this.name, deadline), this.name, field);
   }
 
   private chatBody(req: ChatCompletionRequest): Record<string, unknown> {
@@ -183,7 +193,7 @@ export class OpenAICompatibleBackend implements Backend {
   }
 
   async chat(req: ChatCompletionRequest, { signal }: CallOptions): Promise<ChatResult> {
-    const r = await this.json("/chat/completions", signal, req.model, this.chatBody(req));
+    const r = await this.json<UpstreamResponse>("/chat/completions", signal, req.model, this.chatBody(req));
     const choice = r.choices?.[0];
     const toolCalls = choice?.message?.tool_calls?.length ? choice.message.tool_calls : undefined;
     const result: ChatResult = {
@@ -208,7 +218,7 @@ export class OpenAICompatibleBackend implements Backend {
   }
 
   async complete(req: CompletionRequest, { signal }: CallOptions): Promise<ChatResult> {
-    const r = await this.json("/completions", signal, req.model, this.completionBody(req));
+    const r = await this.json<UpstreamResponse>("/completions", signal, req.model, this.completionBody(req));
     const choice = r.choices?.[0];
     return { content: choice?.text ?? "", finishReason: finishReason(choice?.finish_reason, false), usage: usageFrom(r.usage) };
   }
@@ -221,9 +231,12 @@ export class OpenAICompatibleBackend implements Backend {
     // Always floats from upstream; the gateway encodes base64 itself if the client asked for it.
     const body: Record<string, unknown> = { model: req.model, input: req.input, encoding_format: "float" };
     if (req.dimensions !== undefined) body.dimensions = req.dimensions;
-    const res = await this.request("/embeddings", signal, req.model, body);
-    const r = (await res.json()) as { data?: { index: number; embedding: number[] }[]; usage?: UpstreamUsage; error?: UpstreamResponse["error"] };
-    if (r.error) throw errors.upstreamError(this.name, 500, errorText(r.error));
+    const r = await this.json<{ data?: { index: number; embedding: number[] }[]; usage?: UpstreamUsage; error?: UpstreamResponse["error"] }>(
+      "/embeddings",
+      signal,
+      req.model,
+      body,
+    );
     const data = [...(r.data ?? [])].sort((a, b) => a.index - b.index);
     if (data.length !== req.input.length || !data.every((d) => Array.isArray(d.embedding))) {
       throw errors.upstreamError(this.name, 500, "unexpected embeddings response");
@@ -232,13 +245,11 @@ export class OpenAICompatibleBackend implements Backend {
   }
 
   async listModels({ signal }: CallOptions): Promise<ModelInfo[]> {
-    const res = await this.request("/models", signal, "");
-    const r = (await res.json()) as { data?: { id: string; created?: number }[] };
+    const r = await this.json<{ data?: { id: string; created?: number }[]; error?: UpstreamResponse["error"] }>("/models", signal, "");
     return (r.data ?? []).map((m) => ({ id: m.id, created: m.created ?? 0 }));
   }
 
   async checkHealth({ signal }: CallOptions): Promise<void> {
-    const res = await this.request("/models", signal, "");
-    await res.body?.cancel();
+    await upstreamJson(this.request("/models", signal, ""));
   }
 }
