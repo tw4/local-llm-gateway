@@ -1,0 +1,56 @@
+# local-llm-gateway configuration.
+# Copy to config.yaml (or point LLM_GATEWAY_CONFIG at another path).
+# Any string value can use ${NAME} or ${NAME:-default} to read an environment variable,
+# so secrets stay out of this file.
+
+server:
+  host: 0.0.0.0              # LLM_GATEWAY_HOST overrides
+  port: 8080                 # LLM_GATEWAY_PORT overrides
+  bodyLimitBytes: 4194304    # largest accepted request body (4 MiB)
+
+logging:
+  level: info                # fatal | error | warn | info | debug | trace | silent; LLM_GATEWAY_LOG_LEVEL overrides
+  logBodies: false           # log prompts and completions; keep off unless you are debugging
+
+# Inference servers. `ollama` uses Ollama's API; `openai` any OpenAI-compatible server
+# (llama.cpp server, LM Studio, vLLM).
+backends:
+  ollama:
+    type: ollama
+    url: ${OLLAMA_URL:-http://localhost:11434}
+    timeouts:
+      connectMs: 5000        # connecting and receiving response headers
+      responseMs: 120000     # whole response, or the longest pause between streamed chunks
+  # llamacpp:
+  #   type: openai
+  #   url: http://localhost:8081/v1
+  #   apiKey: ${LLAMACPP_API_KEY}
+
+# What clients ask for → where it runs. Clients only ever see the alias.
+aliases:
+  chat-default:
+    backend: ollama
+    model: qwen3:8b
+  embed-default:
+    backend: ollama
+    model: nomic-embed-text
+
+# Default limits for keys that set none (omit for unlimited).
+limits:
+  requestsPerMinute: 120
+  tokensPerMinute: 200000
+
+# API keys. Clients send `Authorization: Bearer <key>`. The name appears in logs and
+# metrics, never the key. Generate keys with: openssl rand -hex 32
+keys:
+  - name: team
+    key: ${GATEWAY_KEY_TEAM}
+  - name: ci
+    key: ${GATEWAY_KEY_CI}
+    models: [chat-default]   # optional allowlist of aliases
+    limits:
+      requestsPerMinute: 30
+
+healthCheck:
+  intervalMs: 30000
+  timeoutMs: 5000
