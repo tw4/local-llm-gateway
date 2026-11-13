@@ -69,8 +69,12 @@ export class OpenAIStub {
       json(404, { error: { message: `model '${model}' not found`, type: "not_found_error", code: 404 } });
       return;
     }
-    const reply = this.options.reply ?? "Hello from llama.cpp";
-    const usage = { prompt_tokens: 9, completion_tokens: reply.split(" ").length, total_tokens: 9 + reply.split(" ").length };
+    const full = (this.options.reply ?? "Hello from llama.cpp").split(/(?<= )/);
+    const max = typeof body?.max_tokens === "number" ? body.max_tokens : full.length;
+    const words = full.slice(0, max);
+    const reply = words.join("");
+    const stopReason = words.length < full.length ? "length" : "stop";
+    const usage = { prompt_tokens: 9, completion_tokens: words.length, total_tokens: 9 + words.length };
 
     if (path === "/v1/embeddings") {
       const input = (Array.isArray(body?.input) ? body.input : [body?.input]) as string[];
@@ -87,7 +91,7 @@ export class OpenAIStub {
     }
 
     if (body?.stream !== true) {
-      const finish = this.options.toolCall ? "tool_calls" : "stop";
+      const finish = this.options.toolCall ? "tool_calls" : stopReason;
       const choice = chat
         ? {
             index: 0,
@@ -99,7 +103,7 @@ export class OpenAIStub {
             },
             finish_reason: finish,
           }
-        : { index: 0, text: reply, finish_reason: "stop" };
+        : { index: 0, text: reply, finish_reason: stopReason };
       json(200, { id: "x", object: chat ? "chat.completion" : "text_completion", created: 1, model, choices: [choice], usage });
       return;
     }
@@ -118,8 +122,8 @@ export class OpenAIStub {
       send([{ index: 0, delta: { tool_calls: [{ index: 0, function: { arguments: args.slice(half) } }] }, finish_reason: null }]);
       send([{ index: 0, delta: {}, finish_reason: "tool_calls" }]);
     } else {
-      for (const w of reply.split(/(?<= )/)) send([piece(w)]);
-      send([chat ? { index: 0, delta: {}, finish_reason: "stop" } : { index: 0, text: "", finish_reason: "stop" }]);
+      for (const w of words) send([piece(w)]);
+      send([chat ? { index: 0, delta: {}, finish_reason: stopReason } : { index: 0, text: "", finish_reason: stopReason }]);
     }
     const options = body.stream_options as { include_usage?: boolean } | undefined;
     if (options?.include_usage && !this.options.noStreamUsage) send([], { usage });

@@ -28,6 +28,8 @@ const { values: args } = parseArgs({
 const KEY = "smoke-test-key-0123456789";
 const CHAT = "smoke-chat";
 const EMBED = "smoke-embed";
+const RESTRICTED_KEY = "smoke-restricted-key-0123456789";
+const LIMITED_KEY = "smoke-limited-key-0123456789";
 
 let stub: OllamaStub | undefined;
 let ollamaUrl = args.ollama;
@@ -46,7 +48,12 @@ const config = configSchema.parse({
     [CHAT]: { backend: "ollama", model: args["chat-model"] ?? "stub-chat" },
     [EMBED]: { backend: "ollama", model: args["embed-model"] ?? "stub-embed" },
   },
-  keys: [{ name: "smoke", key: KEY }],
+  keys: [
+    { name: "smoke", key: KEY },
+    // For the Python error-class checks: a key limited to one alias, and one to 1 request per minute.
+    { name: "restricted", key: RESTRICTED_KEY, models: [CHAT] },
+    { name: "limited", key: LIMITED_KEY, limits: { requestsPerMinute: 1 } },
+  ],
   logging: { level: "warn" },
 });
 const app = buildApp(config);
@@ -141,7 +148,15 @@ if (!args["skip-python"]) {
     const code = await new Promise<number | null>((resolve) => {
       const child = spawn(python, [join("scripts", "smoke", "smoke.py")], {
         stdio: "inherit",
-        env: { ...process.env, GATEWAY_URL: address, GATEWAY_KEY: KEY, CHAT_MODEL: CHAT, EMBED_MODEL: EMBED },
+        env: {
+          ...process.env,
+          GATEWAY_URL: address,
+          GATEWAY_KEY: KEY,
+          RESTRICTED_KEY,
+          LIMITED_KEY,
+          CHAT_MODEL: CHAT,
+          EMBED_MODEL: EMBED,
+        },
       });
       child.on("close", resolve);
     });
