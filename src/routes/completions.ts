@@ -18,9 +18,12 @@ interface CompletionChoice {
 export function registerCompletionRoutes(app: FastifyInstance, ctx: RouteContext): void {
   app.post("/v1/completions", async (request, reply) => {
     // Every model request counts against the key's limits, even one that turns out invalid.
+    request.gw.endpoint = "completions";
     admitRequest(ctx.limiter, request.apiKey, reply);
     const req = parseCompletionRequest(request.body);
     const target = resolveForKey(ctx.resolveModel, request.apiKey, req.model);
+    request.gw.model = target.requested;
+    request.gw.backend = target.backend.name;
     const upstream = { ...req, model: target.model };
     const controller = abortOnDisconnect(reply);
     const options = { signal: controller.signal };
@@ -59,7 +62,10 @@ export function registerCompletionRoutes(app: FastifyInstance, ctx: RouteContext
       const counter = new StreamUsage(record);
       try {
         for await (const d of deltas) {
-          if (d.content !== undefined) counter.chunk();
+          if (d.content !== undefined) {
+            counter.chunk();
+            request.gw.firstChunkAt ??= Date.now();
+          }
           if (d.usage) counter.final(d.usage.prompt_tokens, d.usage.completion_tokens);
           if (d.content !== undefined || d.finishReason) {
             yield sseData(envelope([{ text: d.content ?? "", index: 0, logprobs: null, finish_reason: d.finishReason ?? null }]));

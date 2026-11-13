@@ -22,6 +22,8 @@ export function sendEventStream(reply: FastifyReply, events: AsyncGenerator<stri
         err instanceof GatewayError
           ? err
           : new GatewayError(500, "The gateway had an internal error while streaming the response.", { type: "server_error", code: "internal_error" });
+      // The status is already 200; the error still counts in metrics and logs.
+      reply.request.gw.errorCode = e.code;
       yield sseData(e.toJSON());
     }
   }

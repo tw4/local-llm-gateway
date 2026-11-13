@@ -13,9 +13,12 @@ export function toBase64(vector: number[]): string {
 export function registerEmbeddingRoutes(app: FastifyInstance, ctx: RouteContext): void {
   app.post("/v1/embeddings", async (request, reply) => {
     // Every model request counts against the key's limits, even one that turns out invalid.
+    request.gw.endpoint = "embeddings";
     admitRequest(ctx.limiter, request.apiKey, reply);
     const req = parseEmbeddingRequest(request.body);
     const target = resolveForKey(ctx.resolveModel, request.apiKey, req.model);
+    request.gw.model = target.requested;
+    request.gw.backend = target.backend.name;
     const controller = abortOnDisconnect(reply);
     const result = await target.backend.embed({ ...req, model: target.model }, { signal: controller.signal }).catch((err: unknown) => {
       throw hideModelName(err, target);

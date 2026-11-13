@@ -104,6 +104,15 @@ export const configSchema = z
       })
       .strict()
       .prefault({}),
+    metrics: z
+      .object({
+        /** Serve Prometheus metrics on GET /metrics. */
+        enabled: bool.default(true),
+        /** If set, /metrics requires `Authorization: Bearer <token>` (it shows key names and aliases). */
+        token: z.string().min(1).optional(),
+      })
+      .strict()
+      .prefault({}),
     healthCheck: z
       .object({
         intervalMs: positiveInt.default(30_000),

@@ -13,9 +13,12 @@ const now = () => Math.floor(Date.now() / 1000);
 export function registerChatRoutes(app: FastifyInstance, ctx: RouteContext): void {
   app.post("/v1/chat/completions", async (request, reply) => {
     // Every model request counts against the key's limits, even one that turns out invalid.
+    request.gw.endpoint = "chat";
     admitRequest(ctx.limiter, request.apiKey, reply);
     const req = parseChatRequest(request.body);
     const target = resolveForKey(ctx.resolveModel, request.apiKey, req.model);
+    request.gw.model = target.requested;
+    request.gw.backend = target.backend.name;
     const upstream = { ...req, model: target.model };
     const controller = abortOnDisconnect(reply);
     const options = { signal: controller.signal };
@@ -83,7 +86,10 @@ export function registerChatRoutes(app: FastifyInstance, ctx: RouteContext): voi
       const counter = new StreamUsage(record);
       try {
         for await (const d of deltas) {
-          if (d.content !== undefined || d.reasoning !== undefined || d.toolCalls) counter.chunk();
+          if (d.content !== undefined || d.reasoning !== undefined || d.toolCalls) {
+            counter.chunk();
+            request.gw.firstChunkAt ??= Date.now();
+          }
           if (d.usage) counter.final(d.usage.prompt_tokens, d.usage.completion_tokens);
           if (d.content !== undefined || d.reasoning !== undefined) {
             yield sseData(
