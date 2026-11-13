@@ -92,6 +92,21 @@ npm run check    # lint, type-check and tests: run this before every commit and 
 npm run build    # compile to dist/
 ```
 
+### SDK smoke test
+
+`npm run smoke` starts the gateway and runs the official OpenAI SDKs for Node and Python
+against it: chat, streaming, embeddings, models and the error classes for a wrong key and an
+unknown model. By default the backend is an Ollama stub, so no model is needed:
+
+```bash
+python3 -m venv .venv-smoke && .venv-smoke/bin/pip install -r scripts/smoke/requirements.txt
+npm run smoke
+# against a real Ollama with small models:
+npm run smoke -- --ollama http://localhost:11434 --chat-model qwen3:0.6b --embed-model all-minilm
+```
+
+Use `--skip-python` to run the Node SDK only, or `PYTHON=/path/to/python` to pick the interpreter.
+
 ## License
 
 [MIT](LICENSE) © Mert Türkoğlu · [mertturkoglu.com](https://www.mertturkoglu.com)
