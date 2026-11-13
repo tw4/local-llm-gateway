@@ -1,3 +1,4 @@
+import { admitRequest } from "../ratelimit.js";
 import { resolveForKey } from "../models.js";
 import type { FastifyInstance } from "fastify";
 import { parseEmbeddingRequest } from "../openai/validate.js";
@@ -11,6 +12,8 @@ export function toBase64(vector: number[]): string {
 
 export function registerEmbeddingRoutes(app: FastifyInstance, ctx: RouteContext): void {
   app.post("/v1/embeddings", async (request, reply) => {
+    // Every model request counts against the key's limits, even one that turns out invalid.
+    admitRequest(ctx.limiter, request.apiKey, reply);
     const req = parseEmbeddingRequest(request.body);
     const target = resolveForKey(ctx.resolveModel, request.apiKey, req.model);
     const controller = abortOnDisconnect(reply);

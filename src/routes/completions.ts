@@ -1,3 +1,4 @@
+import { admitRequest } from "../ratelimit.js";
 import { resolveForKey } from "../models.js";
 import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
@@ -16,6 +17,8 @@ interface CompletionChoice {
 
 export function registerCompletionRoutes(app: FastifyInstance, ctx: RouteContext): void {
   app.post("/v1/completions", async (request, reply) => {
+    // Every model request counts against the key's limits, even one that turns out invalid.
+    admitRequest(ctx.limiter, request.apiKey, reply);
     const req = parseCompletionRequest(request.body);
     const target = resolveForKey(ctx.resolveModel, request.apiKey, req.model);
     const upstream = { ...req, model: target.model };

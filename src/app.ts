@@ -5,6 +5,7 @@ import type { Config } from "./config/schema.js";
 import { registerErrorHandling } from "./errors.js";
 import { HealthMonitor } from "./health.js";
 import { createModelResolver } from "./models.js";
+import { RateLimiter } from "./ratelimit.js";
 import { UsageTracker } from "./usage.js";
 import { registerHealthRoutes } from "./routes/health.js";
 import { registerChatRoutes } from "./routes/chat.js";
@@ -38,10 +39,15 @@ export function buildApp(config: Config, options: AppOptions = {}): FastifyInsta
   });
 
   const usage = new UsageTracker();
+  const limiter = new RateLimiter(config.limits);
+  // Tokens are charged when a response is complete (or estimated, for a stream cut short).
+  usage.onRecord((e) => {
+    limiter.charge(e.key, e.promptTokens + e.completionTokens);
+  });
   app.decorateRequest("tokenUsage", null);
   app.decorate("usage", usage);
 
-  const ctx: RouteContext = { config, backends, health, usage, resolveModel: createModelResolver(config, backends) };
+  const ctx: RouteContext = { config, backends, health, usage, limiter, resolveModel: createModelResolver(config, backends) };
   registerHealthRoutes(app, health);
   registerChatRoutes(app, ctx);
   registerCompletionRoutes(app, ctx);
