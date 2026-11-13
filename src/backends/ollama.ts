@@ -15,9 +15,9 @@ import type {
   ToolCall,
   Usage,
 } from "../openai/types.js";
-import type { Agent, Response } from "undici";
+import type { Agent } from "undici";
 import type { GatewayError } from "../errors.js";
-import { createAgent, Deadline, lines, upstreamFetch, upstreamJson, type UpstreamRequest } from "./http.js";
+import { createAgent, Deadline, lines, upstreamFetch, upstreamJson, type UpstreamRequest, type UpstreamResponse } from "./http.js";
 import type { Backend, CallOptions } from "./types.js";
 
 // Ollama's native API: https://github.com/ollama/ollama/blob/main/docs/api.md
@@ -188,7 +188,7 @@ export class OllamaBackend implements Backend {
   }
 
   /** Reads an NDJSON stream from /api/chat or /api/generate as deltas. */
-  private async *deltas(res: Response, deadline: Deadline): AsyncGenerator<ChatDelta> {
+  private async *deltas(res: UpstreamResponse, deadline: Deadline): AsyncGenerator<ChatDelta> {
     let sawToolCalls = false;
     for await (const line of lines(res, this.name, deadline)) {
       if (!line.trim()) continue;

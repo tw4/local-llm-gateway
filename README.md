@@ -62,6 +62,32 @@ distribution.
 
 Details: [ROADMAP.md](ROADMAP.md).
 
+## Overhead
+
+What the gateway adds to each request, measured with `npm run bench`: an Ollama-compatible
+backend that answers instantly (so only the gateway is measured), the built gateway with
+`info` logging as in production, and a load generator, each in its own process. Every
+scenario runs against the backend's own API and through the gateway, in 5 alternating rounds
+of 2 s each, after a warm-up. Latencies in milliseconds, p50 / p95.
+
+| Scenario | Concurrency | Backend directly | Through the gateway | Added by the gateway | Requests/s (direct / gateway) |
+|---|---:|---:|---:|---:|---:|
+| chat | 1 | 0.11 / 0.23 | 0.35 / 0.62 | **0.23 / 0.39** | 7226 / 2465 |
+| chat | 16 | 1.10 / 1.71 | 3.49 / 5.02 | **2.39 / 3.31** | 13346 / 4354 |
+| chat | 64 | 4.47 / 6.16 | 13.40 / 16.23 | **8.93 / 10.06** | 13720 / 4658 |
+| chat, streamed (20 chunks) | 16 | 1.32 / 1.67 | 7.12 / 9.12 | **5.79 / 7.45** | 11570 / 2156 |
+| embeddings (8 × 384 floats) | 16 | 3.89 / 4.39 | 6.37 / 8.38 | **2.49 / 3.99** | 4037 / 2408 |
+
+Measured on an Intel Core i9-12950HX (24 logical cores, 64 GB RAM), Windows 11, Node.js 26.5,
+with no errors in any run.
+
+How to read it: a single request costs about **a quarter of a millisecond**. A local model
+needs tens to thousands of milliseconds for the same request, so the gateway's share is well
+below 1 %. Under heavy concurrency the gateway runs on one Node.js process and becomes the
+queue at roughly 2,000–4,500 requests per second; above that, the added latency is waiting
+time. That is far beyond what a set of GPUs serving real models can answer, but it is the
+number to watch if you put the gateway in front of a large cluster.
+
 ## Run with Docker
 
 `docker-compose.yml` starts Ollama, pulls a small chat model and an embedding model, and
@@ -90,6 +116,7 @@ npm install
 npm run dev      # start with reload (tsx)
 npm run check    # lint, type-check and tests: run this before every commit and pull request
 npm run build    # compile to dist/
+npm run bench    # overhead benchmark (see "Overhead"); --duration, --rounds, --out file.md
 ```
 
 ### SDK conformance

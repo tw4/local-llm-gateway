@@ -19,7 +19,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "check": "npm run lint && npm run typecheck && npm test",
-    "smoke": "tsx scripts/smoke/run.ts"
+    "smoke": "tsx scripts/smoke/run.ts",
+    "bench": "npm run build && tsx scripts/bench/run.ts"
   },
   "dependencies": {
     "fastify": "5.12.8",

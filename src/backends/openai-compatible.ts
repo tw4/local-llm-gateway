@@ -13,8 +13,8 @@ import type {
   ToolCall,
   Usage,
 } from "../openai/types.js";
-import type { Agent, Response } from "undici";
-import { createAgent, Deadline, lines, upstreamFetch, upstreamJson, type UpstreamRequest } from "./http.js";
+import type { Agent } from "undici";
+import { createAgent, Deadline, lines, upstreamFetch, upstreamJson, type UpstreamRequest, type UpstreamResponse as HttpResponse } from "./http.js";
 import type { Backend, CallOptions } from "./types.js";
 
 // Any server that speaks the OpenAI API: llama.cpp server, LM Studio, vLLM, Ollama's /v1, …
@@ -80,7 +80,7 @@ function samplingBody(s: SamplingOptions): Record<string, unknown> {
 }
 
 /** Reads `data:` events from an SSE stream; multi-line data is joined, comments are skipped. */
-async function* sseEvents(res: Response, backend: string, deadline: Deadline): AsyncGenerator<string> {
+async function* sseEvents(res: HttpResponse, backend: string, deadline: Deadline): AsyncGenerator<string> {
   let data: string[] = [];
   for await (const line of lines(res, backend, deadline)) {
     if (line === "") {
