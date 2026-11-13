@@ -1,4 +1,12 @@
-import type { ChatCompletionRequest, ChatDelta, ChatResult } from "../openai/types.js";
+import type {
+  ChatCompletionRequest,
+  ChatDelta,
+  ChatResult,
+  CompletionRequest,
+  EmbeddingRequest,
+  EmbeddingResult,
+  ModelInfo,
+} from "../openai/types.js";
 
 export interface CallOptions {
   /** Aborted when the client disconnects (or a timeout fires); the upstream request is cancelled. */
@@ -20,4 +28,13 @@ export interface Backend {
    * such as an unknown model are still reported as a normal HTTP error), then yields deltas.
    */
   chatStream(request: ChatCompletionRequest, options: CallOptions): Promise<AsyncIterable<ChatDelta>>;
+
+  /** Text completion; the result's `content` is the generated text. */
+  complete(request: CompletionRequest, options: CallOptions): Promise<ChatResult>;
+  completeStream(request: CompletionRequest, options: CallOptions): Promise<AsyncIterable<ChatDelta>>;
+
+  embed(request: EmbeddingRequest, options: CallOptions): Promise<EmbeddingResult>;
+
+  /** Models the backend serves, by their real names. */
+  listModels(options: CallOptions): Promise<ModelInfo[]>;
 }

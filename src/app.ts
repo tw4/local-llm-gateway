@@ -5,6 +5,9 @@ import type { Config } from "./config/schema.js";
 import { registerErrorHandling } from "./errors.js";
 import { createModelResolver } from "./models.js";
 import { registerChatRoutes } from "./routes/chat.js";
+import { registerCompletionRoutes } from "./routes/completions.js";
+import { registerEmbeddingRoutes } from "./routes/embeddings.js";
+import { registerModelRoutes } from "./routes/models.js";
 import type { RouteContext } from "./routes/context.js";
 
 export interface AppOptions {
@@ -25,5 +28,8 @@ export function buildApp(config: Config, options: AppOptions = {}): FastifyInsta
   const backends = createBackends(config);
   const ctx: RouteContext = { config, backends, resolveModel: createModelResolver(config, backends) };
   registerChatRoutes(app, ctx);
+  registerCompletionRoutes(app, ctx);
+  registerEmbeddingRoutes(app, ctx);
+  registerModelRoutes(app, ctx);
   return app;
 }

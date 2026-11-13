@@ -6,7 +6,11 @@ import type {
   ChatDelta,
   ChatMessage,
   ChatResult,
+  CompletionRequest,
+  EmbeddingRequest,
+  EmbeddingResult,
   FinishReason,
+  ModelInfo,
   SamplingOptions,
   ToolCall,
   Usage,
@@ -28,8 +32,11 @@ interface OllamaMessage {
   tool_name?: string;
 }
 
-interface OllamaChatResponse {
+/** One line of /api/chat or /api/generate output (the first has `message`, the second `response`). */
+interface OllamaResponse {
   message?: { role: string; content?: string; thinking?: string; tool_calls?: OllamaToolCall[] };
+  response?: string;
+  thinking?: string;
   done: boolean;
   done_reason?: string;
   prompt_eval_count?: number;
@@ -66,10 +73,7 @@ export function toOllamaMessages(messages: ChatMessage[]): OllamaMessage[] {
       content = texts.join("\n");
     }
 
-    const out: OllamaMessage = {
-      role: m.role === "developer" ? "system" : m.role,
-      content,
-    };
+    const out: OllamaMessage = { role: m.role === "developer" ? "system" : m.role, content };
     if (images.length > 0) out.images = images;
     if (m.tool_calls?.length) {
       out.tool_calls = m.tool_calls.map((tc) => {
@@ -116,15 +120,32 @@ function toolCallsFrom(calls: OllamaToolCall[] | undefined): ToolCall[] | undefi
   }));
 }
 
-function usageFrom(r: OllamaChatResponse): Usage {
+function usageFrom(r: OllamaResponse): Usage {
   const prompt = r.prompt_eval_count ?? 0;
   const completion = r.eval_count ?? 0;
   return { prompt_tokens: prompt, completion_tokens: completion, total_tokens: prompt + completion };
 }
 
-function finishReason(r: OllamaChatResponse, sawToolCalls: boolean): FinishReason {
+function finishReason(r: OllamaResponse, sawToolCalls: boolean): FinishReason {
   if (sawToolCalls) return "tool_calls";
   return r.done_reason === "length" ? "length" : "stop";
+}
+
+/** The text, thinking and tool calls of one response line, for either endpoint. */
+function partsOf(r: OllamaResponse): { content: string | undefined; reasoning: string | undefined; toolCalls: ToolCall[] | undefined } {
+  return {
+    content: r.message ? r.message.content : r.response,
+    reasoning: r.message ? r.message.thinking : r.thinking,
+    toolCalls: toolCallsFrom(r.message?.tool_calls),
+  };
+}
+
+function toResult(r: OllamaResponse): ChatResult {
+  const p = partsOf(r);
+  const result: ChatResult = { content: p.content ?? "", finishReason: finishReason(r, p.toolCalls !== undefined), usage: usageFrom(r) };
+  if (p.reasoning) result.reasoning = p.reasoning;
+  if (p.toolCalls) result.toolCalls = p.toolCalls;
+  return result;
 }
 
 export class OllamaBackend implements Backend {
@@ -134,6 +155,48 @@ export class OllamaBackend implements Backend {
     readonly name: string,
     private readonly config: BackendConfig,
   ) {}
+
+  private post(path: string, body: unknown, signal: AbortSignal, model: string): Promise<Response> {
+    return upstreamFetch({ backend: this.name, url: `${this.config.url}${path}`, body, signal }, (status, detail) => {
+      // Ollama answers 404 "model 'x' not found"; the route replaces the name with the one the client used.
+      if (status === 404 && /model/i.test(detail)) return errors.modelNotFound(model);
+      // 501 from /api/embed: the model cannot produce embeddings.
+      if (status === 501) return errors.badRequest(`The model '${model}' does not support this endpoint.`, "model", "model_not_supported");
+      return undefined;
+    });
+  }
+
+  /** Reads an NDJSON stream from /api/chat or /api/generate as deltas. */
+  private async *deltas(body: ReadableStream<Uint8Array>, signal: AbortSignal): AsyncGenerator<ChatDelta> {
+    let sawToolCalls = false;
+    for await (const line of lines(body, this.name, signal)) {
+      if (!line.trim()) continue;
+      const r = JSON.parse(line) as OllamaResponse;
+      if (r.error) throw errors.upstreamError(this.name, 500, r.error);
+      const p = partsOf(r);
+      const delta: ChatDelta = {};
+      if (p.content) delta.content = p.content;
+      if (p.reasoning) delta.reasoning = p.reasoning;
+      if (p.toolCalls) {
+        delta.toolCalls = p.toolCalls;
+        sawToolCalls = true;
+      }
+      if (r.done) {
+        delta.finishReason = finishReason(r, sawToolCalls);
+        delta.usage = usageFrom(r);
+      }
+      if (Object.keys(delta).length > 0) yield delta;
+      if (r.done) return;
+    }
+    // The stream ended without `done`: the backend went away mid-response.
+    throw errors.upstreamUnavailable(this.name);
+  }
+
+  private async stream(path: string, body: Record<string, unknown>, signal: AbortSignal, model: string): Promise<AsyncIterable<ChatDelta>> {
+    const res = await this.post(path, body, signal, model);
+    if (!res.body) throw errors.upstreamUnavailable(this.name);
+    return this.deltas(res.body, signal);
+  }
 
   private chatBody(req: ChatCompletionRequest, stream: boolean): Record<string, unknown> {
     const body: Record<string, unknown> = {
@@ -148,56 +211,51 @@ export class OllamaBackend implements Backend {
     return body;
   }
 
-  private post(path: string, body: unknown, signal: AbortSignal, model: string): Promise<Response> {
-    return upstreamFetch({ backend: this.name, url: `${this.config.url}${path}`, body, signal }, (status, detail) =>
-      // Ollama answers 404 "model 'x' not found"; the route replaces the name with the one the client used.
-      status === 404 && /model/i.test(detail) ? errors.modelNotFound(model) : undefined,
-    );
+  private generateBody(req: CompletionRequest, stream: boolean): Record<string, unknown> {
+    const body: Record<string, unknown> = { model: req.model, prompt: req.prompt, stream, options: toOllamaOptions(req) };
+    if (req.suffix !== undefined) body.suffix = req.suffix;
+    return body;
   }
 
   async chat(req: ChatCompletionRequest, { signal }: CallOptions): Promise<ChatResult> {
     const res = await this.post("/api/chat", this.chatBody(req, false), signal, req.model);
-    const r = (await res.json()) as OllamaChatResponse;
+    const r = (await res.json()) as OllamaResponse;
     if (r.error) throw errors.upstreamError(this.name, 500, r.error);
-    const toolCalls = toolCallsFrom(r.message?.tool_calls);
-    const result: ChatResult = {
-      content: r.message?.content ?? "",
-      finishReason: finishReason(r, toolCalls !== undefined),
-      usage: usageFrom(r),
-    };
-    if (r.message?.thinking) result.reasoning = r.message.thinking;
-    if (toolCalls) result.toolCalls = toolCalls;
-    return result;
+    return toResult(r);
   }
 
-  async chatStream(req: ChatCompletionRequest, { signal }: CallOptions): Promise<AsyncIterable<ChatDelta>> {
-    const res = await this.post("/api/chat", this.chatBody(req, true), signal, req.model);
-    if (!res.body) throw errors.upstreamUnavailable(this.name);
-    const body = res.body;
-    const name = this.name;
-    return (async function* () {
-      let sawToolCalls = false;
-      for await (const line of lines(body, name, signal)) {
-        if (!line.trim()) continue;
-        const r = JSON.parse(line) as OllamaChatResponse;
-        if (r.error) throw errors.upstreamError(name, 500, r.error);
-        const delta: ChatDelta = {};
-        if (r.message?.content) delta.content = r.message.content;
-        if (r.message?.thinking) delta.reasoning = r.message.thinking;
-        const toolCalls = toolCallsFrom(r.message?.tool_calls);
-        if (toolCalls) {
-          delta.toolCalls = toolCalls;
-          sawToolCalls = true;
-        }
-        if (r.done) {
-          delta.finishReason = finishReason(r, sawToolCalls);
-          delta.usage = usageFrom(r);
-        }
-        if (Object.keys(delta).length > 0) yield delta;
-        if (r.done) return;
-      }
-      // The stream ended without `done`: the backend went away mid-response.
-      throw errors.upstreamUnavailable(name);
-    })();
+  chatStream(req: ChatCompletionRequest, { signal }: CallOptions): Promise<AsyncIterable<ChatDelta>> {
+    return this.stream("/api/chat", this.chatBody(req, true), signal, req.model);
+  }
+
+  async complete(req: CompletionRequest, { signal }: CallOptions): Promise<ChatResult> {
+    const res = await this.post("/api/generate", this.generateBody(req, false), signal, req.model);
+    const r = (await res.json()) as OllamaResponse;
+    if (r.error) throw errors.upstreamError(this.name, 500, r.error);
+    return toResult(r);
+  }
+
+  completeStream(req: CompletionRequest, { signal }: CallOptions): Promise<AsyncIterable<ChatDelta>> {
+    return this.stream("/api/generate", this.generateBody(req, true), signal, req.model);
+  }
+
+  async embed(req: EmbeddingRequest, { signal }: CallOptions): Promise<EmbeddingResult> {
+    const body: Record<string, unknown> = { model: req.model, input: req.input };
+    if (req.dimensions !== undefined) body.dimensions = req.dimensions;
+    const res = await this.post("/api/embed", body, signal, req.model);
+    const r = (await res.json()) as { embeddings?: number[][]; prompt_eval_count?: number };
+    if (r.embeddings?.length !== req.input.length) {
+      throw errors.upstreamError(this.name, 500, "unexpected number of embeddings");
+    }
+    return { embeddings: r.embeddings, promptTokens: r.prompt_eval_count ?? 0 };
+  }
+
+  async listModels({ signal }: CallOptions): Promise<ModelInfo[]> {
+    const res = await upstreamFetch({ backend: this.name, url: `${this.config.url}/api/tags`, signal });
+    const r = (await res.json()) as { models?: { name: string; modified_at?: string }[] };
+    return (r.models ?? []).map((m) => ({
+      id: m.name,
+      created: m.modified_at ? Math.floor(new Date(m.modified_at).getTime() / 1000) || 0 : 0,
+    }));
   }
 }

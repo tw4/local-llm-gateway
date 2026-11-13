@@ -1,27 +1,7 @@
-import type { FastifyInstance } from "fastify";
 import OpenAI from "openai";
-import { afterEach, describe, expect, it } from "vitest";
-import { buildApp } from "../src/app.js";
-import { TEST_KEY, testConfig } from "./helpers.js";
-import { OllamaStub, type OllamaStubOptions } from "./stubs/ollama.js";
-
-let app: FastifyInstance | undefined;
-let stub: OllamaStub | undefined;
-
-afterEach(async () => {
-  await app?.close();
-  await stub?.stop();
-  app = undefined;
-  stub = undefined;
-});
-
-async function setup(stubOptions: OllamaStubOptions = {}, config: Record<string, unknown> = {}) {
-  stub = await new OllamaStub(stubOptions).start();
-  app = buildApp(testConfig({ backends: { ollama: { type: "ollama", url: stub.url } }, ...config }), { fastify: { logger: false } });
-  const address = await app.listen({ host: "127.0.0.1", port: 0 });
-  const client = new OpenAI({ apiKey: TEST_KEY, baseURL: `${address}/v1`, maxRetries: 0 });
-  return { client, address, stub };
-}
+import { describe, expect, it } from "vitest";
+import { startGateway as setup } from "./gateway.js";
+import { TEST_KEY } from "./helpers.js";
 
 describe("POST /v1/chat/completions (non-streaming)", () => {
   it("returns a chat.completion with content, finish_reason and usage", async () => {
