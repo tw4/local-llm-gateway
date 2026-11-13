@@ -1,0 +1,12 @@
+.git
+node_modules
+dist
+coverage
+test
+docker
+*.log
+.env
+.env.*
+config.yaml
+Dockerfile
+docker-compose.yml
