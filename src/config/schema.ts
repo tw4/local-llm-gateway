@@ -21,10 +21,14 @@ const identifier = z
 
 const timeoutsSchema = z
   .object({
-    /** Time to establish the TCP/TLS connection and receive response headers. */
+    /** Time to establish the TCP/TLS connection. Exceeded: 504, the backend could not be reached in time. */
     connectMs: positiveInt.default(5_000),
-    /** Total time for a non-streaming response, or the longest gap between chunks when streaming. */
-    responseMs: positiveInt.default(120_000),
+    /**
+     * Longest silence from the backend: before the response starts (model loading, or a whole
+     * non-streamed answer, since Ollama sends nothing until it is done) and between streamed
+     * chunks. Each chunk restarts it, so long streams are fine. Exceeded: 504.
+     */
+    responseMs: positiveInt.default(300_000),
   })
   .strict();
 

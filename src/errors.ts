@@ -90,8 +90,8 @@ export const errors = {
   upstreamUnavailable: (backend: string, cause?: unknown) =>
     new GatewayError(502, `The backend '${backend}' is unavailable.`, { type: "upstream_error", code: "upstream_unavailable", cause }),
 
-  upstreamTimeout: (backend: string, cause?: unknown) =>
-    new GatewayError(504, `The backend '${backend}' did not respond in time.`, { type: "timeout_error", code: "upstream_timeout", cause }),
+  upstreamTimeout: (backend: string, detail = "did not respond in time", cause?: unknown) =>
+    new GatewayError(504, `The backend '${backend}' ${detail}.`, { type: "timeout_error", code: "upstream_timeout", cause }),
 
   /**
    * The backend answered with an error status.

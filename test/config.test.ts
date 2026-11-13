@@ -32,7 +32,7 @@ describe("parseConfig", () => {
     expect(cfg.backends.ollama).toEqual({
       type: "ollama",
       url: "http://localhost:11434",
-      timeouts: { connectMs: 5000, responseMs: 120000 },
+      timeouts: { connectMs: 5000, responseMs: 300000 },
     });
     expect(cfg.aliases).toEqual({});
     expect(cfg.limits).toEqual({});

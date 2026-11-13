@@ -24,9 +24,14 @@ afterEach(async () => {
 });
 
 /** Starts an Ollama stub and a gateway in front of it; both are stopped after the test. */
-export async function startGateway(stubOptions: OllamaStubOptions = {}, config: Record<string, unknown> = {}): Promise<TestGateway> {
+export async function startGateway(
+  stubOptions: OllamaStubOptions = {},
+  config: Record<string, unknown> = {},
+  /** Extra settings for the Ollama backend, e.g. `{ timeouts: { responseMs: 300 } }`. */
+  backend: Record<string, unknown> = {},
+): Promise<TestGateway> {
   const stub = await new OllamaStub(stubOptions).start();
-  const app = buildApp(testConfig({ backends: { ollama: { type: "ollama", url: stub.url } }, ...config }), { fastify: { logger: false } });
+  const app = buildApp(testConfig({ backends: { ollama: { type: "ollama", url: stub.url, ...backend } }, ...config }), { fastify: { logger: false } });
   const address = await app.listen({ host: "127.0.0.1", port: 0 });
   running.push({ app, stub });
   const client = new OpenAI({ apiKey: TEST_KEY, baseURL: `${address}/v1`, maxRetries: 0 });

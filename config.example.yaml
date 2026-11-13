@@ -22,8 +22,9 @@ backends:
     type: ollama
     url: ${OLLAMA_URL:-http://localhost:11434}
     timeouts:
-      connectMs: 5000        # connecting and receiving response headers
-      responseMs: 120000     # whole response, or the longest pause between streamed chunks
+      connectMs: 5000        # TCP/TLS connection setup
+      responseMs: 300000     # longest silence: before the answer starts (model load, a whole
+                             # non-streamed answer) and between streamed chunks
   # llamacpp:
   #   type: openai
   #   url: http://localhost:8081/v1
