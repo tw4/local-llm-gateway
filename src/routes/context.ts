@@ -2,12 +2,14 @@ import type { FastifyReply } from "fastify";
 import type { Backend } from "../backends/types.js";
 import type { Config } from "../config/schema.js";
 import { GatewayError } from "../errors.js";
+import type { HealthMonitor } from "../health.js";
 import type { ModelResolver, ResolvedModel } from "../models.js";
 
 /** Everything the /v1 routes need, created once in buildApp. */
 export interface RouteContext {
   config: Config;
   backends: Map<string, Backend>;
+  health: HealthMonitor;
   resolveModel: ModelResolver;
 }
 

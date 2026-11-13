@@ -123,7 +123,7 @@ describe("GET /v1/models", () => {
     const page = await client.models.list();
     expect(page.data.map((m) => m.id)).toEqual(["chat-default", "embed"]);
     expect(JSON.stringify(page.data)).not.toContain("qwen3");
-    expect(stub.requests).toHaveLength(0);
+    expect(stub.modelRequests).toHaveLength(0);
   });
 
   it("retrieves one model, including ids with slashes", async () => {

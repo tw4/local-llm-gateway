@@ -231,7 +231,7 @@ describe("errors", () => {
       .create({ model: "llama3:8b", messages: [{ role: "user", content: [{ type: "image_url", image_url: { url: "http://169.254.169.254/latest" } }] }] })
       .catch((e: unknown) => e);
     expect(err).toBeInstanceOf(OpenAI.BadRequestError);
-    expect(stub.requests).toHaveLength(0);
+    expect(stub.modelRequests).toHaveLength(0);
   });
 });
 

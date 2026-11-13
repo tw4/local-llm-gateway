@@ -37,4 +37,7 @@ export interface Backend {
 
   /** Models the backend serves, by their real names. */
   listModels(options: CallOptions): Promise<ModelInfo[]>;
+
+  /** A cheap request that succeeds when the backend is up. Throws otherwise. */
+  checkHealth(options: CallOptions): Promise<void>;
 }

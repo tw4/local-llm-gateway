@@ -250,6 +250,11 @@ export class OllamaBackend implements Backend {
     return { embeddings: r.embeddings, promptTokens: r.prompt_eval_count ?? 0 };
   }
 
+  async checkHealth({ signal }: CallOptions): Promise<void> {
+    const res = await upstreamFetch({ backend: this.name, url: `${this.config.url}/api/version`, signal });
+    await res.body?.cancel();
+  }
+
   async listModels({ signal }: CallOptions): Promise<ModelInfo[]> {
     const res = await upstreamFetch({ backend: this.name, url: `${this.config.url}/api/tags`, signal });
     const r = (await res.json()) as { models?: { name: string; modified_at?: string }[] };
