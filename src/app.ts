@@ -4,6 +4,7 @@ import { createBackends } from "./backends/index.js";
 import type { Config } from "./config/schema.js";
 import { registerErrorHandling } from "./errors.js";
 import { HealthMonitor } from "./health.js";
+import { genReqId, loggerOptions, type LogStream, registerAccessLog } from "./logging.js";
 import { Metrics, newRequestInfo } from "./metrics.js";
 import { createModelResolver } from "./models.js";
 import { RateLimiter } from "./ratelimit.js";
@@ -25,12 +26,18 @@ declare module "fastify" {
 export interface AppOptions {
   /** Extra Fastify options (tests pass `logger: false`). */
   fastify?: FastifyServerOptions;
+  /** Where log lines go instead of stdout (tests). */
+  logStream?: LogStream;
 }
 
 /** Builds the HTTP app without listening, so tests can use `app.inject()`. */
 export function buildApp(config: Config, options: AppOptions = {}): FastifyInstance {
   const app = Fastify({
-    logger: { level: config.logging.level },
+    logger: loggerOptions(config, options.logStream),
+    // One access line per request instead of Fastify's two (see logging.ts).
+    disableRequestLogging: true,
+    genReqId,
+    requestIdLogLabel: "reqId",
     bodyLimit: config.server.bodyLimitBytes,
     ...options.fastify,
   });
@@ -41,6 +48,7 @@ export function buildApp(config: Config, options: AppOptions = {}): FastifyInsta
     request.gw = newRequestInfo();
     done();
   });
+  registerAccessLog(app, config);
   registerErrorHandling(app);
   registerAuth(app, config.keys);
 

@@ -30,6 +30,7 @@ export function registerCompletionRoutes(app: FastifyInstance, ctx: RouteContext
     const id = `cmpl-${randomUUID().replace(/-/g, "")}`;
     const created = Math.floor(Date.now() / 1000);
     const record = usageRecorder(ctx, request, target, "completions");
+    const logBodies = ctx.config.logging.logBodies;
     const envelope = (choices: CompletionChoice[]) => ({
       id,
       object: "text_completion" as const,
@@ -66,6 +67,7 @@ export function registerCompletionRoutes(app: FastifyInstance, ctx: RouteContext
             counter.chunk();
             request.gw.firstChunkAt ??= Date.now();
           }
+          if (logBodies && d.content) request.completionText = (request.completionText ?? "") + d.content;
           if (d.usage) counter.final(d.usage.prompt_tokens, d.usage.completion_tokens);
           if (d.content !== undefined || d.finishReason) {
             yield sseData(envelope([{ text: d.content ?? "", index: 0, logprobs: null, finish_reason: d.finishReason ?? null }]));
