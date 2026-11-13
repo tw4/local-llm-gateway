@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { errors } from "../errors.js";
-import type { ChatCompletionRequest, ChatMessage, SamplingOptions } from "./types.js";
+import type { ChatCompletionRequest, ChatMessage, CompletionRequest, EmbeddingRequest, SamplingOptions } from "./types.js";
 
 // Unknown fields are accepted and ignored (clients send `user`, `logit_bias`, …), so
 // objects are not strict. Known fields are checked so mistakes get a clear 400.
@@ -133,4 +133,60 @@ export function parseChatRequest(body: unknown): ChatCompletionRequest {
   }) as ChatCompletionRequest;
 }
 
-export { parse as parseBody, samplingFrom, sampling as samplingShape };
+const completionSchema = z.object({
+  model: z.string().min(1),
+  // OpenAI accepts a list of prompts (one choice each); one prompt per request is supported here.
+  prompt: z.union([
+    z.string(),
+    z
+      .array(z.string())
+      .length(1, { message: "only a single prompt per request is supported" }),
+  ]),
+  suffix: z.string().nullish(),
+  echo: z
+    .boolean()
+    .nullish()
+    .refine((e) => e !== true, { message: "echo is not supported" }),
+  best_of: z
+    .number()
+    .int()
+    .nullish()
+    .refine((b) => b == null || b === 1, { message: "only best_of=1 is supported" }),
+  ...sampling,
+});
+
+export function parseCompletionRequest(body: unknown): CompletionRequest {
+  const b = parse(completionSchema, body);
+  return definedOnly({
+    model: b.model,
+    prompt: typeof b.prompt === "string" ? b.prompt : (b.prompt[0] ?? ""),
+    suffix: b.suffix ?? undefined,
+    stream: b.stream ?? false,
+    include_usage: b.stream_options?.include_usage ?? false,
+    ...samplingFrom(b),
+  }) as CompletionRequest;
+}
+
+const embeddingSchema = z.object({
+  model: z.string().min(1),
+  input: z.union(
+    [
+      z.string(),
+      z.array(z.string()).min(1).max(2048),
+    ],
+    { message: "must be a string or an array of strings (token arrays are not supported)" },
+  ),
+  encoding_format: z.enum(["float", "base64"]).nullish(),
+  dimensions: z.number().int().positive().nullish(),
+});
+
+export function parseEmbeddingRequest(body: unknown): EmbeddingRequest {
+  const b = parse(embeddingSchema, body);
+  const req: EmbeddingRequest = {
+    model: b.model,
+    input: typeof b.input === "string" ? [b.input] : b.input,
+    encoding_format: b.encoding_format ?? "float",
+  };
+  if (b.dimensions != null) req.dimensions = b.dimensions;
+  return req;
+}

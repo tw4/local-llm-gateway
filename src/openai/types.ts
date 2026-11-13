@@ -92,6 +92,32 @@ export interface ChatCompletionChunk {
   usage?: Usage | null;
 }
 
+export interface CompletionRequest extends SamplingOptions {
+  model: string;
+  prompt: string;
+  suffix?: string;
+  stream: boolean;
+  include_usage: boolean;
+}
+
+export interface EmbeddingRequest {
+  model: string;
+  input: string[];
+  encoding_format: "float" | "base64";
+  dimensions?: number;
+}
+
+export interface EmbeddingResult {
+  embeddings: number[][];
+  promptTokens: number;
+}
+
+export interface ModelInfo {
+  id: string;
+  /** Unix seconds. */
+  created: number;
+}
+
 /** What a backend returns for a chat request, before the gateway fills in id, model and timestamps. */
 export interface ChatResult {
   content: string | null;

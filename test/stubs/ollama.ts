@@ -20,6 +20,8 @@ export interface OllamaStubOptions {
   thinking?: string;
   /** Stop the stream after this many chunks without `done` (backend crash). */
   dieAfterChunks?: number;
+  /** Models that can embed; other existing models answer /api/embed with 501. Defaults to all. */
+  embeddingModels?: string[];
   /** Override any route. Return true if handled. */
   handle?: (req: IncomingMessage, body: Record<string, unknown> | null, res: ServerResponse) => boolean | Promise<boolean>;
 }
@@ -69,16 +71,40 @@ export class OllamaStub {
 
     const models = this.options.models ?? ["llama3:8b"];
     const model = typeof body?.model === "string" ? body.model : "";
-    if (path === "/api/chat" && !models.includes(model)) {
-      res.writeHead(404, { "content-type": "application/json" }).end(JSON.stringify({ error: `model '${model}' not found` }));
+    const json = (status: number, o: unknown) => res.writeHead(status, { "content-type": "application/json" }).end(JSON.stringify(o));
+
+    if (path === "/api/tags") {
+      json(200, { models: models.map((name) => ({ name, model: name, modified_at: "2026-01-02T03:04:05Z" })) });
       return;
     }
-    if (path === "/api/chat") return this.chat(body ?? {}, res);
+    if (["/api/chat", "/api/generate", "/api/embed"].includes(path) && !models.includes(model)) {
+      json(404, { error: `model '${model}' not found` });
+      return;
+    }
+    if (path === "/api/chat") return this.generate(body ?? {}, res, "chat");
+    if (path === "/api/generate") return this.generate(body ?? {}, res, "generate");
+    if (path === "/api/embed") {
+      if (this.options.embeddingModels && !this.options.embeddingModels.includes(model)) {
+        json(501, { error: "This server does not support embeddings. Start it with `--embeddings`" });
+        return;
+      }
+      const input = typeof body?.input === "string" ? [body.input] : ((body?.input ?? []) as string[]);
+      // Deterministic vectors: [length, first char code, 0.5, -0.25].
+      json(200, {
+        model,
+        embeddings: input.map((s) => [s.length, s.charCodeAt(0) || 0, 0.5, -0.25]),
+        prompt_eval_count: input.join(" ").split(/\s+/).length,
+      });
+      return;
+    }
     res.writeHead(404).end("404 page not found");
   }
 
-  private async chat(body: Record<string, unknown>, res: ServerResponse): Promise<void> {
+  private async generate(body: Record<string, unknown>, res: ServerResponse, kind: "chat" | "generate"): Promise<void> {
     const model = String(body.model);
+    // /api/chat puts text in `message`, /api/generate in `response`.
+    const piece = (content: string, extra: Record<string, unknown> = {}) =>
+      kind === "chat" ? { message: { role: "assistant", content, ...extra } } : { response: content, ...extra };
     const reply = this.options.reply ?? "Hello from the stub";
     const options = (body.options ?? {}) as { num_predict?: number };
     const words = reply.split(/(?<= )/);
@@ -87,11 +113,12 @@ export class OllamaStub {
     const usage = { prompt_eval_count: 12, eval_count: limited.length };
 
     if (body.stream === false) {
-      const message: Record<string, unknown> = { role: "assistant", content: this.options.toolCalls ? "" : limited.join("") };
-      if (this.options.toolCalls) message.tool_calls = this.options.toolCalls;
-      if (this.options.thinking) message.thinking = this.options.thinking;
+      const extra: Record<string, unknown> = {};
+      if (this.options.toolCalls && kind === "chat") extra.tool_calls = this.options.toolCalls;
+      if (this.options.thinking) extra.thinking = this.options.thinking;
+      const text = this.options.toolCalls && kind === "chat" ? "" : limited.join("");
       res.writeHead(200, { "content-type": "application/json" }).end(
-        JSON.stringify({ model, created_at: new Date().toISOString(), message, done: true, done_reason: doneReason, ...usage }),
+        JSON.stringify({ model, created_at: new Date().toISOString(), ...piece(text, extra), done: true, done_reason: doneReason, ...usage }),
       );
       return;
     }
@@ -108,9 +135,9 @@ export class OllamaStub {
     const send = (o: unknown) => res.write(`${JSON.stringify(o)}\n`);
     const pause = () => new Promise((r) => setTimeout(r, this.options.chunkDelayMs ?? 0));
 
-    if (this.options.thinking) send({ model, message: { role: "assistant", content: "", thinking: this.options.thinking }, done: false });
-    if (this.options.toolCalls) {
-      send({ model, message: { role: "assistant", content: "", tool_calls: this.options.toolCalls }, done: false });
+    if (this.options.thinking) send({ model, ...piece("", { thinking: this.options.thinking }), done: false });
+    if (this.options.toolCalls && kind === "chat") {
+      send({ model, ...piece("", { tool_calls: this.options.toolCalls }), done: false });
     } else {
       for (const [i, w] of limited.entries()) {
         if (state.closed) return;
@@ -118,12 +145,12 @@ export class OllamaStub {
           res.destroy();
           return;
         }
-        send({ model, message: { role: "assistant", content: w }, done: false });
+        send({ model, ...piece(w), done: false });
         await pause();
       }
     }
     if (state.closed) return;
-    send({ model, message: { role: "assistant", content: "" }, done: true, done_reason: doneReason, ...usage });
+    send({ model, ...piece(""), done: true, done_reason: doneReason, ...usage });
     res.end();
   }
 }
