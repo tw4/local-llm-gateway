@@ -1,3 +1,4 @@
+import { resolveForKey } from "../models.js";
 import type { FastifyInstance } from "fastify";
 import { parseEmbeddingRequest } from "../openai/validate.js";
 import { abortOnDisconnect, hideModelName, type RouteContext } from "./context.js";
@@ -11,7 +12,7 @@ export function toBase64(vector: number[]): string {
 export function registerEmbeddingRoutes(app: FastifyInstance, ctx: RouteContext): void {
   app.post("/v1/embeddings", async (request, reply) => {
     const req = parseEmbeddingRequest(request.body);
-    const target = ctx.resolveModel(req.model);
+    const target = resolveForKey(ctx.resolveModel, request.apiKey, req.model);
     const controller = abortOnDisconnect(reply);
     const result = await target.backend.embed({ ...req, model: target.model }, { signal: controller.signal }).catch((err: unknown) => {
       throw hideModelName(err, target);

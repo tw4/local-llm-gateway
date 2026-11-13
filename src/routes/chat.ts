@@ -1,3 +1,4 @@
+import { resolveForKey } from "../models.js";
 import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { parseChatRequest } from "../openai/validate.js";
@@ -10,7 +11,7 @@ const now = () => Math.floor(Date.now() / 1000);
 export function registerChatRoutes(app: FastifyInstance, ctx: RouteContext): void {
   app.post("/v1/chat/completions", async (request, reply) => {
     const req = parseChatRequest(request.body);
-    const target = ctx.resolveModel(req.model);
+    const target = resolveForKey(ctx.resolveModel, request.apiKey, req.model);
     const upstream = { ...req, model: target.model };
     const controller = abortOnDisconnect(reply);
     const options = { signal: controller.signal };
