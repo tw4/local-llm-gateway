@@ -17,6 +17,11 @@ export default tseslint.config(
     },
   },
   {
+    // Tests exercise deprecated OpenAI parameters (max_tokens, seed) on purpose: clients still send them.
+    files: ["test/**/*.ts"],
+    rules: { "@typescript-eslint/no-deprecated": "off" },
+  },
+  {
     files: ["**/*.js"],
     ...tseslint.configs.disableTypeChecked,
   },
