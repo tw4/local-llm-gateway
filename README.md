@@ -92,11 +92,16 @@ npm run check    # lint, type-check and tests: run this before every commit and 
 npm run build    # compile to dist/
 ```
 
-### SDK smoke test
+### SDK conformance
 
-`npm run smoke` starts the gateway and runs the official OpenAI SDKs for Node and Python
-against it: chat, streaming, embeddings, models and the error classes for a wrong key and an
-unknown model. By default the backend is an Ollama stub, so no model is needed:
+`npm test` includes a conformance suite (`test/conformance.test.ts`) that runs the official
+`openai` Node SDK against the gateway with each backend type: every endpoint (streaming and
+not), tool calls, reasoning, the SDK's stream and pagination helpers, streaming edge cases (client
+abort, a backend that dies or goes silent mid-stream, multi-byte characters split across network
+packets) and every error class with its status, `code` and body shape.
+
+`npm run smoke` does the same with the Python SDK, plus a short Node run, against a gateway it
+starts. By default the backend is an Ollama stub, so no model is needed:
 
 ```bash
 python3 -m venv .venv-smoke && .venv-smoke/bin/pip install -r scripts/smoke/requirements.txt

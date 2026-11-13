@@ -1,4 +1,4 @@
-import Fastify, { type FastifyInstance, type FastifyServerOptions } from "fastify";
+import Fastify, { type FastifyInstance, type FastifyServerOptions, LogController } from "fastify";
 import { registerAuth } from "./auth.js";
 import { createBackends } from "./backends/index.js";
 import type { Config } from "./config/schema.js";
@@ -35,9 +35,8 @@ export function buildApp(config: Config, options: AppOptions = {}): FastifyInsta
   const app = Fastify({
     logger: loggerOptions(config, options.logStream),
     // One access line per request instead of Fastify's two (see logging.ts).
-    disableRequestLogging: true,
+    logController: new LogController({ disableRequestLogging: true, requestIdLogLabel: "reqId" }),
     genReqId,
-    requestIdLogLabel: "reqId",
     bodyLimit: config.server.bodyLimitBytes,
     ...options.fastify,
   });
@@ -48,6 +47,8 @@ export function buildApp(config: Config, options: AppOptions = {}): FastifyInsta
     request.gw = newRequestInfo();
     done();
   });
+  // The OpenAI API speaks JSON only: anything else gets 415 instead of reaching the routes.
+  app.removeContentTypeParser("text/plain");
   registerAccessLog(app, config);
   registerErrorHandling(app);
   registerAuth(app, config.keys);
