@@ -1,3 +1,4 @@
+import { resolveForKey } from "../models.js";
 import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import type { ChatDelta, FinishReason, Usage } from "../openai/types.js";
@@ -15,7 +16,7 @@ interface CompletionChoice {
 export function registerCompletionRoutes(app: FastifyInstance, ctx: RouteContext): void {
   app.post("/v1/completions", async (request, reply) => {
     const req = parseCompletionRequest(request.body);
-    const target = ctx.resolveModel(req.model);
+    const target = resolveForKey(ctx.resolveModel, request.apiKey, req.model);
     const upstream = { ...req, model: target.model };
     const controller = abortOnDisconnect(reply);
     const options = { signal: controller.signal };

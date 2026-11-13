@@ -1,5 +1,5 @@
 import type { Backend } from "./backends/types.js";
-import type { Config } from "./config/schema.js";
+import type { Config, KeyConfig } from "./config/schema.js";
 import { errors } from "./errors.js";
 
 export interface ResolvedModel {
@@ -11,6 +11,21 @@ export interface ResolvedModel {
 }
 
 export type ModelResolver = (requested: string) => ResolvedModel;
+
+/** Whether a key may use a model. A key without an allowlist may use every alias. */
+export function isAllowed(key: KeyConfig | null, model: string): boolean {
+  return key?.models === undefined || key.models.includes(model);
+}
+
+/**
+ * Resolves a model for a request's key: 404 if it does not exist, 403 if the key's
+ * allowlist does not include it.
+ */
+export function resolveForKey(resolve: ModelResolver, key: KeyConfig | null, requested: string): ResolvedModel {
+  const target = resolve(requested);
+  if (!isAllowed(key, requested)) throw errors.modelNotAllowed(requested);
+  return target;
+}
 
 /**
  * Maps the model a client asks for to a backend and its real model name.
