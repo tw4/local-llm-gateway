@@ -3,7 +3,8 @@ import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import type { ChatDelta, FinishReason, Usage } from "../openai/types.js";
 import { parseCompletionRequest } from "../openai/validate.js";
-import { abortOnDisconnect, ClientDisconnected, hideModelName, type RouteContext } from "./context.js";
+import { StreamUsage } from "../usage.js";
+import { abortOnDisconnect, ClientDisconnected, hideModelName, type RouteContext, usageRecorder } from "./context.js";
 import { sendEventStream, SSE_DONE, sseData } from "./sse.js";
 
 interface CompletionChoice {
@@ -22,6 +23,7 @@ export function registerCompletionRoutes(app: FastifyInstance, ctx: RouteContext
     const options = { signal: controller.signal };
     const id = `cmpl-${randomUUID().replace(/-/g, "")}`;
     const created = Math.floor(Date.now() / 1000);
+    const record = usageRecorder(ctx, request, target, "completions");
     const envelope = (choices: CompletionChoice[]) => ({
       id,
       object: "text_completion" as const,
@@ -35,6 +37,7 @@ export function registerCompletionRoutes(app: FastifyInstance, ctx: RouteContext
       const result = await target.backend.complete(upstream, options).catch((err: unknown) => {
         throw hideModelName(err, target);
       });
+      record(result.usage.prompt_tokens, result.usage.completion_tokens, false);
       return {
         ...envelope([{ text: result.content ?? "", index: 0, logprobs: null, finish_reason: result.finishReason }]),
         usage: result.usage,
@@ -50,8 +53,11 @@ export function registerCompletionRoutes(app: FastifyInstance, ctx: RouteContext
 
     async function* events(): AsyncGenerator<string> {
       let usage: Usage | undefined;
+      const counter = new StreamUsage(record);
       try {
         for await (const d of deltas) {
+          if (d.content !== undefined) counter.chunk();
+          if (d.usage) counter.final(d.usage.prompt_tokens, d.usage.completion_tokens);
           if (d.content !== undefined || d.finishReason) {
             yield sseData(envelope([{ text: d.content ?? "", index: 0, logprobs: null, finish_reason: d.finishReason ?? null }]));
           }
@@ -59,8 +65,10 @@ export function registerCompletionRoutes(app: FastifyInstance, ctx: RouteContext
         }
       } catch (err) {
         throw hideModelName(err, target);
+      } finally {
+        counter.finish();
       }
-      if (req.include_usage && usage) yield sseData({ ...envelope([]), usage });
+      if (req.include_usage) yield sseData({ ...envelope([]), usage: usage ?? { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 } });
       yield SSE_DONE;
     }
 

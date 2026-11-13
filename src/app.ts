@@ -5,6 +5,7 @@ import type { Config } from "./config/schema.js";
 import { registerErrorHandling } from "./errors.js";
 import { HealthMonitor } from "./health.js";
 import { createModelResolver } from "./models.js";
+import { UsageTracker } from "./usage.js";
 import { registerHealthRoutes } from "./routes/health.js";
 import { registerChatRoutes } from "./routes/chat.js";
 import { registerCompletionRoutes } from "./routes/completions.js";
@@ -36,7 +37,11 @@ export function buildApp(config: Config, options: AppOptions = {}): FastifyInsta
     done();
   });
 
-  const ctx: RouteContext = { config, backends, health, resolveModel: createModelResolver(config, backends) };
+  const usage = new UsageTracker();
+  app.decorateRequest("tokenUsage", null);
+  app.decorate("usage", usage);
+
+  const ctx: RouteContext = { config, backends, health, usage, resolveModel: createModelResolver(config, backends) };
   registerHealthRoutes(app, health);
   registerChatRoutes(app, ctx);
   registerCompletionRoutes(app, ctx);

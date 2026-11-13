@@ -1,4 +1,5 @@
-import type { FastifyReply } from "fastify";
+import type { FastifyReply, FastifyRequest } from "fastify";
+import type { Endpoint, UsageEvent, UsageTracker } from "../usage.js";
 import type { Backend } from "../backends/types.js";
 import type { Config } from "../config/schema.js";
 import { GatewayError } from "../errors.js";
@@ -10,7 +11,22 @@ export interface RouteContext {
   config: Config;
   backends: Map<string, Backend>;
   health: HealthMonitor;
+  usage: UsageTracker;
   resolveModel: ModelResolver;
+}
+
+/** Returns a function that records the tokens of this request (and keeps them for the log line). */
+export function usageRecorder(
+  ctx: RouteContext,
+  request: FastifyRequest,
+  target: ResolvedModel,
+  endpoint: Endpoint,
+): (promptTokens: number, completionTokens: number, estimated: boolean) => void {
+  return (promptTokens, completionTokens, estimated) => {
+    const event: UsageEvent = { key: request.apiKey?.name ?? "", model: target.requested, endpoint, promptTokens, completionTokens, estimated };
+    request.tokenUsage = event;
+    ctx.usage.record(event);
+  };
 }
 
 /** Raised as the abort reason when the client goes away. */

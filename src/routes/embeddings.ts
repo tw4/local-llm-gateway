@@ -1,7 +1,7 @@
 import { resolveForKey } from "../models.js";
 import type { FastifyInstance } from "fastify";
 import { parseEmbeddingRequest } from "../openai/validate.js";
-import { abortOnDisconnect, hideModelName, type RouteContext } from "./context.js";
+import { abortOnDisconnect, hideModelName, type RouteContext, usageRecorder } from "./context.js";
 
 /** OpenAI's base64 encoding: the vector as little-endian float32, base64-encoded. */
 export function toBase64(vector: number[]): string {
@@ -17,6 +17,7 @@ export function registerEmbeddingRoutes(app: FastifyInstance, ctx: RouteContext)
     const result = await target.backend.embed({ ...req, model: target.model }, { signal: controller.signal }).catch((err: unknown) => {
       throw hideModelName(err, target);
     });
+    usageRecorder(ctx, request, target, "embeddings")(result.promptTokens, 0, false);
     return {
       object: "list",
       data: result.embeddings.map((embedding, index) => ({

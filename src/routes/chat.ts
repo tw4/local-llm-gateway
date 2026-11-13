@@ -3,7 +3,8 @@ import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { parseChatRequest } from "../openai/validate.js";
 import type { ChatCompletion, ChatCompletionChunk, ChatDelta, Usage } from "../openai/types.js";
-import { abortOnDisconnect, ClientDisconnected, hideModelName, type RouteContext } from "./context.js";
+import { StreamUsage } from "../usage.js";
+import { abortOnDisconnect, ClientDisconnected, hideModelName, type RouteContext, usageRecorder } from "./context.js";
 import { sendEventStream, SSE_DONE, sseData } from "./sse.js";
 
 const now = () => Math.floor(Date.now() / 1000);
@@ -17,6 +18,7 @@ export function registerChatRoutes(app: FastifyInstance, ctx: RouteContext): voi
     const options = { signal: controller.signal };
     const id = `chatcmpl-${randomUUID().replace(/-/g, "")}`;
     const created = now();
+    const record = usageRecorder(ctx, request, target, "chat");
 
     if (!req.stream) {
       let result;
@@ -25,6 +27,7 @@ export function registerChatRoutes(app: FastifyInstance, ctx: RouteContext): voi
       } catch (err) {
         throw hideModelName(err, target);
       }
+      record(result.usage.prompt_tokens, result.usage.completion_tokens, false);
       const response: ChatCompletion = {
         id,
         object: "chat.completion",
@@ -73,8 +76,12 @@ export function registerChatRoutes(app: FastifyInstance, ctx: RouteContext): voi
       yield sseData(chunk({ role: "assistant", content: "" }));
       let usage: Usage | undefined;
       let toolIndex = 0;
+      // Exact counts when the backend reports them, an estimate if the stream is cut short.
+      const counter = new StreamUsage(record);
       try {
         for await (const d of deltas) {
+          if (d.content !== undefined || d.reasoning !== undefined || d.toolCalls) counter.chunk();
+          if (d.usage) counter.final(d.usage.prompt_tokens, d.usage.completion_tokens);
           if (d.content !== undefined || d.reasoning !== undefined) {
             yield sseData(
               chunk({
@@ -93,9 +100,12 @@ export function registerChatRoutes(app: FastifyInstance, ctx: RouteContext): voi
         }
       } catch (err) {
         throw hideModelName(err, target);
+      } finally {
+        // Runs on completion, on errors and when the client disconnects.
+        counter.finish();
       }
-      if (req.include_usage && usage) {
-        yield sseData({ ...chunk({}), choices: [], usage });
+      if (req.include_usage) {
+        yield sseData({ ...chunk({}), choices: [], usage: usage ?? { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 } });
       }
       yield SSE_DONE;
     }

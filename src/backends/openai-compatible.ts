@@ -137,7 +137,9 @@ async function* deltasFrom(events: AsyncGenerator<string>, backend: string, fiel
   const toolCalls: ToolCall[] = [...calls.entries()]
     .sort(([a], [b]) => a - b)
     .map(([i, c]) => ({ id: c.id || `call_${i}`, type: "function", function: { name: c.name, arguments: c.arguments } }));
-  const last: ChatDelta = { finishReason: finishReason(finish, toolCalls.length > 0), usage: usageFrom(usage) };
+  const last: ChatDelta = { finishReason: finishReason(finish, toolCalls.length > 0) };
+  // Left out when the server did not report it, so the gateway knows the counts are unknown.
+  if (usage) last.usage = usageFrom(usage);
   if (toolCalls.length > 0) last.toolCalls = toolCalls;
   yield last;
 }
