@@ -1,5 +1,6 @@
 import type { Config } from "../config/schema.js";
 import { OllamaBackend } from "./ollama.js";
+import { OpenAICompatibleBackend } from "./openai-compatible.js";
 import type { Backend } from "./types.js";
 
 /** Creates one client per configured backend. */
@@ -11,7 +12,8 @@ export function createBackends(config: Config): Map<string, Backend> {
         backends.set(name, new OllamaBackend(name, cfg));
         break;
       case "openai":
-        throw new Error(`backends.${name}: type "openai" is not supported yet`);
+        backends.set(name, new OpenAICompatibleBackend(name, cfg));
+        break;
     }
   }
   return backends;

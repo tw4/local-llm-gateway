@@ -12,8 +12,11 @@ logging:
   level: info                # fatal | error | warn | info | debug | trace | silent; LLM_GATEWAY_LOG_LEVEL overrides
   logBodies: false           # log prompts and completions; keep off unless you are debugging
 
-# Inference servers. `ollama` uses Ollama's API; `openai` any OpenAI-compatible server
-# (llama.cpp server, LM Studio, vLLM).
+# Inference servers. `ollama` uses Ollama's native API (url without /v1). `openai` is any
+# OpenAI-compatible server; its url is the base URL including /v1:
+#   llama.cpp server  http://localhost:8080/v1      (llama-server --api-key … → apiKey)
+#   LM Studio         http://localhost:1234/v1
+#   vLLM              http://localhost:8000/v1      (vllm serve --api-key … → apiKey)
 backends:
   ollama:
     type: ollama
