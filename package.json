@@ -18,7 +18,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "check": "npm run lint && npm run typecheck && npm test"
+    "check": "npm run lint && npm run typecheck && npm test",
+    "smoke": "tsx scripts/smoke/run.ts"
   },
   "dependencies": {
     "fastify": "5.12.8",

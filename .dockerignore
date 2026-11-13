@@ -10,3 +10,5 @@ docker
 config.yaml
 Dockerfile
 docker-compose.yml
+scripts
+.venv-smoke
