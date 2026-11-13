@@ -1,5 +1,6 @@
 import Fastify, { type FastifyInstance, type FastifyServerOptions } from "fastify";
 import type { Config } from "./config/schema.js";
+import { registerErrorHandling } from "./errors.js";
 
 export interface AppOptions {
   /** Extra Fastify options (tests pass `logger: false`). */
@@ -13,5 +14,6 @@ export function buildApp(config: Config, options: AppOptions = {}): FastifyInsta
     bodyLimit: config.server.bodyLimitBytes,
     ...options.fastify,
   });
+  registerErrorHandling(app);
   return app;
 }
