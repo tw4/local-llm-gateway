@@ -91,6 +91,8 @@ backends:
   ollama:
     type: llamafile
     url: ftp://example.com
+keys:
+  - { name: a, key: k }
 `),
     ).toEqual([
       "server.port: Too big: expected number to be <=65535",
@@ -120,8 +122,9 @@ keys:
   });
 
   it("requires at least one backend", () => {
-    expect(problems("keys: []")).toEqual([expect.stringMatching(/^backends: /)]);
-    expect(problems("backends: {}")).toEqual(["backends: define at least one backend"]);
+    const key = "keys: [{ name: a, key: k }]\n";
+    expect(problems(key)).toEqual(["backends: define at least one backend"]);
+    expect(problems(`backends: {}\n${key}`)).toEqual(["backends: define at least one backend"]);
   });
 
   it("explains YAML syntax errors with the line", () => {

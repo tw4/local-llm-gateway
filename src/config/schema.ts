@@ -91,13 +91,21 @@ export const configSchema = z
       })
       .strict()
       .prefault({}),
-    backends: z.record(identifier, backendSchema).refine((b) => Object.keys(b).length > 0, {
-      message: "define at least one backend",
-    }),
+    // A missing section gets the same clear message as an empty one.
+    backends: z.preprocess(
+      (v) => v ?? {},
+      z.record(identifier, backendSchema).refine((b) => Object.keys(b).length > 0, {
+        message: "define at least one backend",
+      }),
+    ),
     aliases: z.record(identifier, aliasSchema).default({}),
     /** Defaults applied to keys that set no limits of their own. */
     limits: limitsSchema.prefault({}),
-    keys: z.array(keySchema).default([]),
+    // No key, no access: the gateway never runs open.
+    keys: z.preprocess(
+      (v) => v ?? [],
+      z.array(keySchema).min(1, { message: "define at least one API key; the gateway does not run without authentication" }),
+    ),
   })
   .strict()
   .superRefine((cfg, ctx) => {
