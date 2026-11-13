@@ -25,6 +25,7 @@ export function registerChatRoutes(app: FastifyInstance, ctx: RouteContext): voi
     const id = `chatcmpl-${randomUUID().replace(/-/g, "")}`;
     const created = now();
     const record = usageRecorder(ctx, request, target, "chat");
+    const logBodies = ctx.config.logging.logBodies;
 
     if (!req.stream) {
       let result;
@@ -90,6 +91,7 @@ export function registerChatRoutes(app: FastifyInstance, ctx: RouteContext): voi
             counter.chunk();
             request.gw.firstChunkAt ??= Date.now();
           }
+          if (logBodies && d.content) request.completionText = (request.completionText ?? "") + d.content;
           if (d.usage) counter.final(d.usage.prompt_tokens, d.usage.completion_tokens);
           if (d.content !== undefined || d.reasoning !== undefined) {
             yield sseData(
