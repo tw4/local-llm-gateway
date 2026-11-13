@@ -39,13 +39,29 @@ export const backendSchema = z
   })
   .strict();
 
-export const aliasSchema = z
+const aliasObject = z
   .object({
     backend: identifier,
     /** The model name on the backend, e.g. `qwen3:8b`. */
     model: z.string().min(1),
   })
   .strict();
+
+/**
+ * `{ backend: ollama, model: qwen3:8b }`, or the short form `ollama/qwen3:8b`. In the short
+ * form only the first `/` separates the backend, so `ollama/hf.co/org/model:Q4` works.
+ */
+export const aliasSchema = z.union([
+  aliasObject,
+  z
+    .string()
+    .regex(/^[^/]+\/.+$/, { message: 'use "backend/model" or { backend, model }' })
+    .transform((s) => {
+      const i = s.indexOf("/");
+      return { backend: s.slice(0, i), model: s.slice(i + 1) };
+    })
+    .pipe(aliasObject),
+]);
 
 export const limitsSchema = z
   .object({
