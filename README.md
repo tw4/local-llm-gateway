@@ -62,6 +62,17 @@ distribution.
 
 Details: [ROADMAP.md](ROADMAP.md).
 
+## Development
+
+Requires Node.js 22.12 or later.
+
+```bash
+npm install
+npm run dev      # start with reload (tsx)
+npm run check    # lint, type-check and tests: run this before every commit and pull request
+npm run build    # compile to dist/
+```
+
 ## License
 
 [MIT](LICENSE) © Mert Türkoğlu · [mertturkoglu.com](https://www.mertturkoglu.com)
