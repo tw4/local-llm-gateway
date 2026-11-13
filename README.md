@@ -62,6 +62,25 @@ distribution.
 
 Details: [ROADMAP.md](ROADMAP.md).
 
+## Run with Docker
+
+`docker-compose.yml` starts Ollama, pulls a small chat model and an embedding model, and
+starts the gateway on port 8080:
+
+```bash
+echo "GATEWAY_API_KEY=$(openssl rand -hex 32)" > .env
+docker compose up -d
+
+source .env
+curl http://localhost:8080/v1/chat/completions \
+  -H "Authorization: Bearer $GATEWAY_API_KEY" -H "Content-Type: application/json" \
+  -d '{"model": "chat-default", "messages": [{"role": "user", "content": "Hello!"}]}'
+```
+
+Choose other models with `CHAT_MODEL` and `EMBED_MODEL` in `.env`. The gateway's
+configuration is [`docker/config.yaml`](docker/config.yaml). The image runs as a non-root user
+with a read-only file system, and its health check uses `/livez`.
+
 ## Development
 
 Requires Node.js 22.12 or later.
