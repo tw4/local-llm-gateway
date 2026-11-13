@@ -6,3 +6,6 @@ coverage/
 !.env.example
 *.log
 .DS_Store
+
+# Local configuration (copy config.example.yaml)
+config.yaml

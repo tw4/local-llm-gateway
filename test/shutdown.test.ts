@@ -1,6 +1,7 @@
 import { EventEmitter } from "node:events";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildApp } from "../src/app.js";
+import { testConfig } from "./helpers.js";
 import { installShutdownHandlers } from "../src/shutdown.js";
 
 function fakeProcess() {
@@ -20,7 +21,7 @@ afterEach(() => {
 
 describe("graceful shutdown", () => {
   it("lets an in-flight request finish before exiting with 0", async () => {
-    const app = buildApp();
+    const app = buildApp(testConfig(), { fastify: { logger: false } });
     let release!: () => void;
     const gate = new Promise<void>((r) => (release = r));
     app.get("/slow", async () => {
