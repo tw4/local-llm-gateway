@@ -35,6 +35,7 @@ export function registerModelRoutes(app: FastifyInstance, ctx: RouteContext): vo
   }
 
   app.get("/v1/models", async (request, reply) => {
+    request.gw.endpoint = "models";
     const controller = abortOnDisconnect(reply);
     return { object: "list", data: await list(controller.signal, request.apiKey) };
   });
@@ -42,6 +43,7 @@ export function registerModelRoutes(app: FastifyInstance, ctx: RouteContext): vo
   // Model ids can contain slashes (hf.co/org/model), so match the rest of the path.
   // A model the key may not use is "not found" here, like in the list.
   app.get("/v1/models/*", async (request, reply) => {
+    request.gw.endpoint = "models";
     const id = decodeURIComponent((request.params as { "*": string })["*"]);
     const controller = abortOnDisconnect(reply);
     const model = (await list(controller.signal, request.apiKey)).find((m) => m.id === id);

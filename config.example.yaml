@@ -58,3 +58,11 @@ keys:
 healthCheck:
   intervalMs: 30000
   timeoutMs: 5000
+
+# Prometheus metrics on GET /metrics: requests, latency, time to first chunk, tokens,
+# upstream errors and rate limits by key name and alias, plus backend health.
+# The output contains key names and aliases: set a token, or keep /metrics off the
+# public network.
+metrics:
+  enabled: true
+  # token: ${METRICS_TOKEN}   # then scrape with: authorization: Bearer <token>

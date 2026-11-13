@@ -149,6 +149,8 @@ function fromFastifyError(err: FastifyError): GatewayError | null {
 export function registerErrorHandling(app: FastifyInstance): void {
   app.setErrorHandler((err: FastifyError, request, reply) => {
     const mapped = err instanceof GatewayError ? err : fromFastifyError(err);
+    // For metrics and logs (request.gw is set for every request, except in odd early failures).
+    if ((request.gw as typeof request.gw | null) !== null) request.gw.errorCode = mapped?.code ?? "internal_error";
     if (mapped) {
       if (mapped.status >= 500) request.log.warn({ err }, mapped.message);
       return sendError(reply, mapped);
