@@ -1,4 +1,5 @@
 import Fastify, { type FastifyInstance, type FastifyServerOptions } from "fastify";
+import { registerAuth } from "./auth.js";
 import type { Config } from "./config/schema.js";
 import { registerErrorHandling } from "./errors.js";
 
@@ -15,5 +16,6 @@ export function buildApp(config: Config, options: AppOptions = {}): FastifyInsta
     ...options.fastify,
   });
   registerErrorHandling(app);
+  registerAuth(app, config.keys);
   return app;
 }
