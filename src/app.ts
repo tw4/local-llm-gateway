@@ -3,7 +3,9 @@ import { registerAuth } from "./auth.js";
 import { createBackends } from "./backends/index.js";
 import type { Config } from "./config/schema.js";
 import { registerErrorHandling } from "./errors.js";
+import { HealthMonitor } from "./health.js";
 import { createModelResolver } from "./models.js";
+import { registerHealthRoutes } from "./routes/health.js";
 import { registerChatRoutes } from "./routes/chat.js";
 import { registerCompletionRoutes } from "./routes/completions.js";
 import { registerEmbeddingRoutes } from "./routes/embeddings.js";
@@ -26,7 +28,16 @@ export function buildApp(config: Config, options: AppOptions = {}): FastifyInsta
   registerAuth(app, config.keys);
 
   const backends = createBackends(config);
-  const ctx: RouteContext = { config, backends, resolveModel: createModelResolver(config, backends) };
+  const health = new HealthMonitor(backends, { ...config.healthCheck, log: app.log });
+  // The first round of checks finishes before the server accepts connections.
+  app.addHook("onReady", () => health.start());
+  app.addHook("onClose", (_instance, done) => {
+    health.stop();
+    done();
+  });
+
+  const ctx: RouteContext = { config, backends, health, resolveModel: createModelResolver(config, backends) };
+  registerHealthRoutes(app, health);
   registerChatRoutes(app, ctx);
   registerCompletionRoutes(app, ctx);
   registerEmbeddingRoutes(app, ctx);

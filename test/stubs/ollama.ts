@@ -55,6 +55,11 @@ export class OllamaStub {
     });
   }
 
+  /** Requests other than the gateway's health checks. */
+  get modelRequests(): RecordedRequest[] {
+    return this.requests.filter((r) => r.path !== "/api/version");
+  }
+
   last(path: string): RecordedRequest | undefined {
     return this.requests.filter((r) => r.path === path).at(-1);
   }
@@ -73,6 +78,10 @@ export class OllamaStub {
     const model = typeof body?.model === "string" ? body.model : "";
     const json = (status: number, o: unknown) => res.writeHead(status, { "content-type": "application/json" }).end(JSON.stringify(o));
 
+    if (path === "/api/version") {
+      json(200, { version: "0.0.0-stub" });
+      return;
+    }
     if (path === "/api/tags") {
       json(200, { models: models.map((name) => ({ name, model: name, modified_at: "2026-01-02T03:04:05Z" })) });
       return;
