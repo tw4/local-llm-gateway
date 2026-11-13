@@ -1,4 +1,5 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
+import type { RateLimiter } from "../ratelimit.js";
 import type { Endpoint, UsageEvent, UsageTracker } from "../usage.js";
 import type { Backend } from "../backends/types.js";
 import type { Config } from "../config/schema.js";
@@ -12,6 +13,7 @@ export interface RouteContext {
   backends: Map<string, Backend>;
   health: HealthMonitor;
   usage: UsageTracker;
+  limiter: RateLimiter;
   resolveModel: ModelResolver;
 }
 
