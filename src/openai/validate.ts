@@ -31,7 +31,16 @@ const sampling = {
 
 const contentPart = z.discriminatedUnion("type", [
   z.object({ type: z.literal("text"), text: z.string() }),
-  z.object({ type: z.literal("image_url"), image_url: z.object({ url: z.string(), detail: z.string().optional() }) }),
+  z.object({
+    type: z.literal("image_url"),
+    image_url: z.object({
+      // Remote URLs would make the gateway or the backend fetch arbitrary addresses (SSRF).
+      url: z.string().regex(/^data:image\/[a-z0-9.+-]+;base64,./i, {
+        message: "only base64 data URLs (data:image/...;base64,...) are supported, not remote URLs",
+      }),
+      detail: z.string().optional(),
+    }),
+  }),
 ]);
 
 const toolCall = z.object({
