@@ -23,6 +23,7 @@ export function registerModelRoutes(app: FastifyInstance, ctx: RouteContext): vo
    * Without, it is every model the backends report.
    */
   async function list(signal: AbortSignal, key: KeyConfig | null): Promise<OpenAIModel[]> {
+    if (key === null) throw errors.missingApiKey();
     let models: ModelInfo[];
     if (aliases.length > 0) {
       models = aliases.filter((id) => isAllowed(key, id)).map((id) => ({ id, created: startedAt }));

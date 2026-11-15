@@ -93,6 +93,11 @@ export const configSchema = z
         port: int().pipe(z.number().min(0).max(65_535)).default(8080),
         /** Largest accepted request body. */
         bodyLimitBytes: positiveInt.default(4 * 1024 * 1024),
+        /**
+         * Longest time a client may take to send its request (headers and body). Stops slow
+         * clients from holding connections open; does not limit how long a response streams.
+         */
+        requestTimeoutMs: positiveInt.default(30_000),
       })
       .strict()
       .prefault({}),

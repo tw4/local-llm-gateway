@@ -89,8 +89,11 @@ describe("model aliases", () => {
     }
     // The errors still say which model failed, by its alias.
     expect(responses[10].text).toContain("'missing'");
-    expect(responses[11].text).toContain("failed to load chat: out of memory");
-    expect(responses[12].text).toContain("chat runner crashed");
+    // A backend's own failure text can carry internals (paths, hosts), so it is logged, not sent.
+    expect(responses[11].text).toContain("failed while processing the request");
+    expect(responses[11].text).not.toContain("out of memory");
+    expect(responses[12].text).toContain("failed while processing the request");
+    expect(responses[12].text).not.toContain("runner crashed");
   });
 
   it("answer with the alias as the model", async () => {
