@@ -1,9 +1,9 @@
 {
   "name": "local-llm-gateway",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "description": "OpenAI-compatible gateway for self-hosted models (Ollama, llama.cpp, vLLM): auth, model aliases, rate limits, metrics.",
   "license": "MIT",
-  "author": "Mert T\u00fcrko\u011flu",
+  "author": "Mert Türkoğlu",
   "type": "module",
   "private": true,
   "engines": {

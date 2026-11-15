@@ -31,6 +31,16 @@ The workflow then:
   and build provenance attached;
 - creates the GitHub release with the changelog section as its notes.
 
+Docker Hub (`mertturkoglu/local-llm-gateway`) is pushed from your machine, since the workflow
+holds no Docker Hub credentials. After the tag, with `docker login` done once:
+
+```sh
+v=X.Y.Z
+docker buildx build --platform linux/amd64,linux/arm64 --provenance=mode=max --sbom=true \
+  -t mertturkoglu/local-llm-gateway:$v -t mertturkoglu/local-llm-gateway:${v%.*} \
+  -t mertturkoglu/local-llm-gateway:${v%%.*} -t mertturkoglu/local-llm-gateway:latest --push .
+```
+
 A tag with a suffix (`v1.1.0-rc.1`) is published as a pre-release and does not move `latest`.
 
 After the first release, check that the package at
