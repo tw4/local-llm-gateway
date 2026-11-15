@@ -1,5 +1,5 @@
 import { createHash, timingSafeEqual } from "node:crypto";
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { KeyConfig } from "./config/schema.js";
 import { errors } from "./errors.js";
 
@@ -37,13 +37,35 @@ export function bearerToken(header: string | undefined): string | null {
   return match?.[1] ?? null;
 }
 
+/**
+ * The path a request is served under: the route the router matched (e.g. `/v1/models/:model`),
+ * or, for unknown URLs, the percent-decoded path.
+ *
+ * Never decide on `request.url` alone: it is the raw URL, while the router decodes it, so
+ * `/%76%31/models` reaches the `/v1/models` route without ever starting with "/v1/".
+ */
+export function servedPath(request: FastifyRequest): string {
+  const route = request.routeOptions.url;
+  if (route !== undefined) return route;
+  const raw = request.url.split("?", 1)[0] ?? "";
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;
+  }
+}
+
+/** Whether a path belongs to the authenticated OpenAI API. */
+export function isApiPath(path: string): boolean {
+  return path === "/v1" || path.startsWith("/v1/");
+}
+
 /** Requires a valid API key on every /v1/* request, including unknown /v1 paths. */
 export function registerAuth(app: FastifyInstance, keys: readonly KeyConfig[]): void {
   const match = createKeyMatcher(keys);
   app.decorateRequest("apiKey", null);
   app.addHook("onRequest", (request, _reply, done) => {
-    const path = request.url.split("?", 1)[0] ?? "";
-    if (path !== "/v1" && !path.startsWith("/v1/")) {
+    if (!isApiPath(servedPath(request))) {
       done();
       return;
     }

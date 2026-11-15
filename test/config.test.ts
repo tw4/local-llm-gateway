@@ -27,7 +27,7 @@ function problems(text: string, env: NodeJS.ProcessEnv = {}): string[] {
 describe("parseConfig", () => {
   it("fills in defaults and trims the trailing slash of URLs", () => {
     const cfg = parseConfig(minimal, { env: {} });
-    expect(cfg.server).toEqual({ host: "0.0.0.0", port: 8080, bodyLimitBytes: 4 * 1024 * 1024 });
+    expect(cfg.server).toEqual({ host: "0.0.0.0", port: 8080, bodyLimitBytes: 4 * 1024 * 1024, requestTimeoutMs: 30_000 });
     expect(cfg.logging).toEqual({ level: "info", logBodies: false });
     expect(cfg.backends.ollama).toEqual({
       type: "ollama",

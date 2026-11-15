@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "description": "OpenAI-compatible gateway for self-hosted models (Ollama, llama.cpp, vLLM): auth, model aliases, rate limits, metrics.",
   "license": "MIT",
-  "author": "Mert Türkoğlu",
+  "author": "Mert T\u00fcrko\u011flu",
   "type": "module",
   "private": true,
   "engines": {
@@ -39,5 +39,8 @@
     "typescript": "6.0.3",
     "typescript-eslint": "8.72.2",
     "vitest": "5.1.0"
+  },
+  "overrides": {
+    "minimatch": "11.0.3"
   }
 }

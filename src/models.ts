@@ -12,9 +12,13 @@ export interface ResolvedModel {
 
 export type ModelResolver = (requested: string) => ResolvedModel;
 
-/** Whether a key may use a model. A key without an allowlist may use every alias. */
+/**
+ * Whether a key may use a model. A key without an allowlist may use every alias; no key
+ * may use nothing (a second line of defence should a request ever reach a route unauthenticated).
+ */
 export function isAllowed(key: KeyConfig | null, model: string): boolean {
-  return key?.models === undefined || key.models.includes(model);
+  if (key === null) return false;
+  return key.models === undefined || key.models.includes(model);
 }
 
 /**
@@ -22,6 +26,7 @@ export function isAllowed(key: KeyConfig | null, model: string): boolean {
  * allowlist does not include it.
  */
 export function resolveForKey(resolve: ModelResolver, key: KeyConfig | null, requested: string): ResolvedModel {
+  if (key === null) throw errors.missingApiKey();
   const target = resolve(requested);
   if (!isAllowed(key, requested)) throw errors.modelNotAllowed(requested);
   return target;

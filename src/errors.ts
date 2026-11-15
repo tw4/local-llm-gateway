@@ -102,14 +102,30 @@ export const errors = {
    * - 5xx: → 502.
    */
   upstreamError: (backend: string, status: number, detail: string) => {
-    const message = `The backend '${backend}' returned an error: ${detail}`;
+    // Only a rejected request keeps the backend's words: they tell the client what to fix
+    // (context too long, bad parameter). Server-side failures can carry file paths, stack
+    // traces or internal hostnames, so the client gets the status only; the detail is kept
+    // as the cause, for the gateway's own log.
+    const cause = new Error(`HTTP ${status} from backend '${backend}': ${detail}`);
     if (status === 429) {
-      return new GatewayError(503, message, { type: "upstream_error", code: "upstream_overloaded" });
+      return new GatewayError(503, `The backend '${backend}' is overloaded. Try again later.`, {
+        type: "upstream_error",
+        code: "upstream_overloaded",
+        cause,
+      });
     }
     if (status >= 400 && status < 500 && status !== 401 && status !== 403) {
-      return new GatewayError(status, message, { type: "invalid_request_error", code: "upstream_rejected" });
+      return new GatewayError(status, `The backend '${backend}' returned an error: ${detail}`, {
+        type: "invalid_request_error",
+        code: "upstream_rejected",
+        cause,
+      });
     }
-    return new GatewayError(502, message, { type: "upstream_error", code: "upstream_error" });
+    return new GatewayError(502, `The backend '${backend}' failed while processing the request.`, {
+      type: "upstream_error",
+      code: "upstream_error",
+      cause,
+    });
   },
 };
 

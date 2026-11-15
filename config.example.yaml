@@ -7,6 +7,7 @@ server:
   host: 0.0.0.0              # LLM_GATEWAY_HOST overrides
   port: 8080                 # LLM_GATEWAY_PORT overrides
   bodyLimitBytes: 4194304    # largest accepted request body (4 MiB)
+  requestTimeoutMs: 30000    # slowest a client may send its request; streamed responses are not limited
 
 logging:
   level: info                # fatal | error | warn | info | debug | trace | silent; LLM_GATEWAY_LOG_LEVEL overrides

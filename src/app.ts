@@ -1,5 +1,5 @@
 import Fastify, { type FastifyInstance, type FastifyServerOptions, LogController } from "fastify";
-import { registerAuth } from "./auth.js";
+import { isApiPath, registerAuth, servedPath } from "./auth.js";
 import { createBackends } from "./backends/index.js";
 import type { Config } from "./config/schema.js";
 import { registerErrorHandling } from "./errors.js";
@@ -30,6 +30,24 @@ export interface AppOptions {
   logStream?: LogStream;
 }
 
+/** Shortest key length that is not reported as guessable at startup. */
+export const MIN_KEY_LENGTH = 24;
+
+/** Keys are bearer secrets with no lockout: short ones can be guessed, so say so loudly. */
+function warnWeakKeys(app: FastifyInstance, config: Config): void {
+  for (const k of config.keys) {
+    if (k.key.length < MIN_KEY_LENGTH) {
+      app.log.warn(
+        { key: k.name },
+        `API key "${k.name}" is only ${k.key.length} characters long; use at least ${MIN_KEY_LENGTH} random characters (e.g. openssl rand -hex 32)`,
+      );
+    }
+  }
+  if (config.metrics.enabled && !config.metrics.token && config.server.host !== "127.0.0.1" && config.server.host !== "localhost") {
+    app.log.warn("/metrics is served without a token on a public interface; it shows key names and aliases (set metrics.token)");
+  }
+}
+
 /** Builds the HTTP app without listening, so tests can use `app.inject()`. */
 export function buildApp(config: Config, options: AppOptions = {}): FastifyInstance {
   const app = Fastify({
@@ -38,6 +56,15 @@ export function buildApp(config: Config, options: AppOptions = {}): FastifyInsta
     logController: new LogController({ disableRequestLogging: true, requestIdLogLabel: "reqId" }),
     genReqId,
     bodyLimit: config.server.bodyLimitBytes,
+    requestTimeout: config.server.requestTimeoutMs,
+    // Handed to http.createServer as well, because Fastify only assigns requestTimeout after
+    // the server exists: Node then keeps its 60 s headersTimeout, and silently ignores any
+    // requestTimeout shorter than that. Node also checks timeouts only every 30 s by default.
+    http: {
+      requestTimeout: config.server.requestTimeoutMs,
+      headersTimeout: Math.min(60_000, config.server.requestTimeoutMs),
+      connectionsCheckingInterval: Math.max(100, Math.min(5_000, Math.floor(config.server.requestTimeoutMs / 2))),
+    },
     ...options.fastify,
   });
 
@@ -49,6 +76,7 @@ export function buildApp(config: Config, options: AppOptions = {}): FastifyInsta
   });
   // The OpenAI API speaks JSON only: anything else gets 415 instead of reaching the routes.
   app.removeContentTypeParser("text/plain");
+  warnWeakKeys(app, config);
   registerAccessLog(app, config);
   registerErrorHandling(app);
   registerAuth(app, config.keys);
@@ -57,7 +85,7 @@ export function buildApp(config: Config, options: AppOptions = {}): FastifyInsta
   app.decorate("metrics", metrics);
   // Every /v1 request, once its response (or stream) has ended.
   app.addHook("onResponse", (request, reply, done) => {
-    if (request.url.startsWith("/v1/")) {
+    if (isApiPath(servedPath(request))) {
       metrics.observeRequest(request.apiKey?.name ?? "unauthenticated", request.gw, reply.statusCode, Date.now());
     }
     done();
