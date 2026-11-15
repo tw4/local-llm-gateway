@@ -1,0 +1,29 @@
+# Gateway configuration for docker-compose.yml. Values come from .env:
+#   GATEWAY_API_KEY (required), CHAT_MODEL, EMBED_MODEL, LOG_LEVEL
+# See config.example.yaml for every option.
+
+server:
+  host: 0.0.0.0
+  port: 8080
+
+logging:
+  level: ${LOG_LEVEL:-info}
+
+backends:
+  ollama:
+    type: ollama
+    # The Ollama service on the compose network; its port is not published.
+    url: http://ollama:11434
+
+# Clients use these names; the real model names stay hidden.
+aliases:
+  chat-default: ollama/${CHAT_MODEL:-qwen3:0.6b}
+  embed-default: ollama/${EMBED_MODEL:-all-minilm}
+
+keys:
+  - name: default
+    key: ${GATEWAY_API_KEY}
+
+metrics:
+  # The gateway's port is published, so /metrics needs the key too.
+  token: ${GATEWAY_API_KEY}

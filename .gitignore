@@ -8,7 +8,7 @@ coverage/
 .DS_Store
 
 # Local configuration (copy config.example.yaml)
-config.yaml
+/config.yaml
 
 # Python environment for the SDK smoke test
 .venv-smoke/
