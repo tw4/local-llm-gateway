@@ -11,6 +11,7 @@ so every tool your team already uses works with your local models: securely, and
 [![Node.js ≥ 22](https://img.shields.io/badge/node-%E2%89%A5%2022-339933?logo=node.js&logoColor=white)](package.json)
 [![OpenAI SDK conformance](https://img.shields.io/badge/OpenAI%20SDKs-conformance%20tested-412991)](test/conformance.test.ts)
 [![Overhead](https://img.shields.io/badge/overhead-0.23%20ms%20p50-success)](#how-fast-is-it)
+[![Docker Hub](https://img.shields.io/docker/v/mertturkoglu/local-llm-gateway?sort=semver&label=docker&logo=docker&logoColor=white)](https://hub.docker.com/r/mertturkoglu/local-llm-gateway)
 
 [Quick start](#quick-start) · [Why](#why) · [Works with](#works-with-your-tools) · [Configuration](docs/configuration.md) · [Security](SECURITY.md)
 
@@ -56,15 +57,20 @@ curl http://localhost:8080/v1/chat/completions \
 Pick other models with `CHAT_MODEL` and `EMBED_MODEL` in `.env`. Ollama's port is not published:
 only the gateway can reach it.
 
-**Already running Ollama?** Run just the gateway (Node.js 22.19+):
+**Already running Ollama?** Run just the gateway. Write a `config.yaml` (start from
+[`config.example.yaml`](config.example.yaml)), then:
 
 ```bash
-cp config.example.yaml config.yaml      # set your keys and aliases
-npm install && npm run build && npm start
+docker run -d --name llm-gateway -p 8080:8080 --read-only \
+  -v "$PWD/config.yaml:/config/config.yaml:ro" \
+  mertturkoglu/local-llm-gateway:1
 ```
 
-The container image is published to `ghcr.io/tw4/local-llm-gateway` with every release
-(`linux/amd64` and `linux/arm64`).
+From a container, Ollama on the same machine is `http://host.docker.internal:11434` (on Linux,
+add `--add-host=host.docker.internal:host-gateway`). The image is on
+[Docker Hub](https://hub.docker.com/r/mertturkoglu/local-llm-gateway) and
+`ghcr.io/tw4/local-llm-gateway`, for `linux/amd64` and `linux/arm64`. Without Docker:
+`npm install && npm run build && npm start` (Node.js 22.19+).
 
 ## Point any OpenAI client at it
 

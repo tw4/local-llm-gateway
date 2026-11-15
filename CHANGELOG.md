@@ -10,8 +10,19 @@ their changes are listed below for reference and ship in the first release.
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-11-15
+
+The first release: the gateway is feature-complete for the v1.0 roadmap, reviewed for
+security and published as a container image.
+
 ### Added
 
+- Container images for `linux/amd64` and `linux/arm64` on Docker Hub
+  (`mertturkoglu/local-llm-gateway`) and GitHub Container Registry
+  (`ghcr.io/tw4/local-llm-gateway`).
+- Documentation: a [configuration reference](https://github.com/tw4/local-llm-gateway/blob/main/docs/configuration.md) and
+  [guides](https://github.com/tw4/local-llm-gateway/blob/main/docs/integrations.md) for curl, the OpenAI SDKs, LangChain, Continue, Open WebUI
+  and n8n ([#21](https://github.com/tw4/local-llm-gateway/issues/21)).
 - Releases: a `v*` tag publishes a multi-arch container image (`linux/amd64`, `linux/arm64`)
   to `ghcr.io/tw4/local-llm-gateway`, with an SBOM and build provenance, and a GitHub
   release with these notes ([#22](https://github.com/tw4/local-llm-gateway/issues/22)).
@@ -83,4 +94,5 @@ An OpenAI client pointed at the gateway can chat with a local Ollama model.
 - `Dockerfile` and `docker-compose.yml` with Ollama (#30).
 - SDK smoke test with the official Node and Python clients (#31).
 
-[Unreleased]: https://github.com/tw4/local-llm-gateway/commits/main
+[Unreleased]: https://github.com/tw4/local-llm-gateway/compare/v1.0.0...main
+[1.0.0]: https://github.com/tw4/local-llm-gateway/releases/tag/v1.0.0
