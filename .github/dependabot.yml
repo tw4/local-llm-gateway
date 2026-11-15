@@ -1,9 +1,12 @@
 version: 2
 updates:
+  # New releases wait two weeks before an update is proposed (supply-chain safety).
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 14
     groups:
       actions:
         patterns: ["*"]
@@ -11,9 +14,12 @@ updates:
     directory: /
     schedule:
       interval: weekly
-    # New releases wait two weeks before an update is proposed (supply-chain safety).
     cooldown:
       default-days: 14
+    ignore:
+      # The types follow the oldest supported Node.js (engines: >=22.19), not the newest.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
     groups:
       dev-dependencies:
         dependency-type: development
@@ -21,3 +27,5 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 14
