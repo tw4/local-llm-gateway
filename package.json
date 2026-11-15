@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "description": "OpenAI-compatible gateway for self-hosted models (Ollama, llama.cpp, vLLM): auth, model aliases, rate limits, metrics.",
   "license": "MIT",
-  "author": "Mert Türkoğlu",
+  "author": "Mert T\u00fcrko\u011flu",
   "type": "module",
   "private": true,
   "engines": {
@@ -19,6 +19,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "check": "npm run lint && npm run typecheck && npm test",
+    "verify": "npm run check && npm run build && npm audit --omit=dev --audit-level=moderate && npm run smoke",
     "smoke": "tsx scripts/smoke/run.ts",
     "bench": "npm run build && tsx scripts/bench/run.ts"
   },

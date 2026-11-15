@@ -15,8 +15,8 @@ their changes are listed below for reference and ship in the first release.
 - Releases: a `v*` tag publishes a multi-arch container image (`linux/amd64`, `linux/arm64`)
   to `ghcr.io/tw4/local-llm-gateway`, with an SBOM and build provenance, and a GitHub
   release with these notes ([#22](https://github.com/tw4/local-llm-gateway/issues/22)).
-- CI on every pull request: lint, typecheck and tests on Node.js 22 and 24, the OpenAI SDK
-  smoke test (Node and Python), and a container build that must start and answer `/livez`.
+- `npm run verify`: every local check before a release in one command (lint, typecheck,
+  tests, build, production `npm audit`, OpenAI SDK smoke test with Node and Python).
 - `server.requestTimeoutMs` (30 s): a client that takes longer to send its request gets
   408 ([#20](https://github.com/tw4/local-llm-gateway/issues/20)).
 - Startup warnings for API keys shorter than 24 characters and for `/metrics` without a

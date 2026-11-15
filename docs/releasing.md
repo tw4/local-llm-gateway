@@ -1,12 +1,21 @@
 # Releasing
 
-Releases are cut from `main` by pushing a tag. The [release workflow](../.github/workflows/release.yml)
-runs the full CI first and stops before publishing anything if a check fails.
+Releases are cut from `main` by pushing a tag; the [release workflow](../.github/workflows/release.yml)
+then publishes the image and the GitHub release. There is no CI: the checks run on your machine.
 
-1. Move the entries under `## [Unreleased]` in [`CHANGELOG.md`](../CHANGELOG.md) to a new
+1. Run everything locally on the commit you are going to tag:
+
+   ```sh
+   npm run verify         # lint, typecheck, tests, build, npm audit, OpenAI SDK smoke test (Node + Python)
+   docker build -t local-llm-gateway:check .   # the image builds
+   ```
+
+   The smoke test needs the Python SDK once:
+   `python3 -m venv .venv-smoke && .venv-smoke/bin/pip install -r scripts/smoke/requirements.txt`.
+2. Move the entries under `## [Unreleased]` in [`CHANGELOG.md`](../CHANGELOG.md) to a new
    `## [X.Y.Z] - YYYY-MM-DD` section, and add a fresh, empty `[Unreleased]` above it.
-2. Set `"version": "X.Y.Z"` in `package.json` and run `npm install` so `package-lock.json` follows.
-3. Merge that to `main`, then tag the merge commit:
+3. Set `"version": "X.Y.Z"` in `package.json` and run `npm install` so `package-lock.json` follows.
+4. Merge that to `main`, then tag the merge commit:
 
    ```sh
    git tag -a vX.Y.Z -m "vX.Y.Z"
