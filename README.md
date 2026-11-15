@@ -11,7 +11,7 @@ so every tool your team already uses works with your local models: securely, and
 [![Node.js ≥ 22](https://img.shields.io/badge/node-%E2%89%A5%2022-339933?logo=node.js&logoColor=white)](package.json)
 [![OpenAI SDK conformance](https://img.shields.io/badge/OpenAI%20SDKs-conformance%20tested-412991)](test/conformance.test.ts)
 [![Overhead](https://img.shields.io/badge/overhead-0.23%20ms%20p50-success)](#how-fast-is-it)
-[![Docker Hub](https://img.shields.io/docker/v/mertturkoglu/local-llm-gateway?sort=semver&label=docker&logo=docker&logoColor=white)](https://hub.docker.com/r/mertturkoglu/local-llm-gateway)
+[![Docker Hub](https://img.shields.io/docker/v/mertturkoglu/local-llm-gateway?sort=semver&label=docker%20hub&logo=docker&logoColor=white&cacheSeconds=3600)](https://hub.docker.com/r/mertturkoglu/local-llm-gateway)
 
 [Quick start](#quick-start) · [Why](#why) · [Works with](#works-with-your-tools) · [Configuration](docs/configuration.md) · [Security](SECURITY.md)
 

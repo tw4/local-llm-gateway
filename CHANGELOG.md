@@ -10,6 +10,22 @@ their changes are listed below for reference and ship in the first release.
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-11-15
+
+### Changed
+
+- The container image runs on Node.js 26 (the active LTS line) instead of 22. The gateway
+  itself still supports Node.js 22.19 and later
+  ([#45](https://github.com/tw4/local-llm-gateway/pull/45)).
+- Dependabot waits two weeks before proposing any new release, now for GitHub Actions and the
+  base image too, and no longer proposes major `@types/node` updates, which follow the oldest
+  supported Node.js ([#49](https://github.com/tw4/local-llm-gateway/pull/49)).
+
+### Fixed
+
+- The Docker Hub badge in the README showed "repository not found": GitHub had cached it
+  from before the first image was pushed.
+
 ## [1.0.0] - 2026-11-15
 
 The first release: the gateway is feature-complete for the v1.0 roadmap, reviewed for
@@ -94,5 +110,6 @@ An OpenAI client pointed at the gateway can chat with a local Ollama model.
 - `Dockerfile` and `docker-compose.yml` with Ollama (#30).
 - SDK smoke test with the official Node and Python clients (#31).
 
-[Unreleased]: https://github.com/tw4/local-llm-gateway/compare/v1.0.0...main
+[Unreleased]: https://github.com/tw4/local-llm-gateway/compare/v1.0.1...main
+[1.0.1]: https://github.com/tw4/local-llm-gateway/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/tw4/local-llm-gateway/releases/tag/v1.0.0
