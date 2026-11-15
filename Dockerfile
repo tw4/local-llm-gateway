@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # ---- build: compile TypeScript with the dev dependencies
-FROM node:22-alpine AS build
+FROM node:26-alpine AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --ignore-scripts --no-audit --no-fund
@@ -10,13 +10,13 @@ COPY src ./src
 RUN npm run build
 
 # ---- deps: production dependencies only
-FROM node:22-alpine AS deps
+FROM node:26-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --ignore-scripts --no-audit --no-fund && npm cache clean --force
 
 # ---- runtime
-FROM node:22-alpine
+FROM node:26-alpine
 ENV NODE_ENV=production \
     LLM_GATEWAY_CONFIG=/config/config.yaml \
     LLM_GATEWAY_HOST=0.0.0.0 \
